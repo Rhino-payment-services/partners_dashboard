@@ -1,6 +1,5 @@
 "use client"
 import React, { useState } from 'react'
-import NavaBar from '@/components/NavaBar'
 import { TrendingUp, Filter, CheckCircle, Clock, XCircle, CreditCard } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -23,8 +22,7 @@ function CollectionsPage() {
 
   return (
     <div className='flex flex-col min-h-screen bg-gray-50'>
-      <NavaBar />
-      <main className='flex-1 p-8 mx-auto w-full '>
+      <main className='flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-7xl'>
         <div className='mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
           <div className='flex items-center gap-3'>
             <TrendingUp className='text-blue-500' size={32} />

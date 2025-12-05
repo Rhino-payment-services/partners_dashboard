@@ -1,231 +1,317 @@
 "use client"
-import React, { useState } from 'react'
-import NavaBar from '@/components/NavaBar'
+
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { AlertTriangle, KeyRound, Eye, EyeOff, Copy } from 'lucide-react'
+import { AlertTriangle, KeyRound, Copy } from 'lucide-react'
+import { getPartnerProfile, generateGatewayApiKey, revokeGatewayApiKey } from '@/lib/api'
 
-function generateKeyPair() {
-  // Placeholder: generate random keys
-  const pub = 'pk_live_' + Math.random().toString(36).slice(2, 18).toUpperCase()
-  const priv = 'sk_live_' + Math.random().toString(36).slice(2, 32).toUpperCase()
-  return { publicKey: pub, privateKey: priv }
+const ENV_VAR = process.env.NEXT_PUBLIC_PARTNER_ENVIRONMENT || 'production'
+const CURRENT_ENV: 'DEVELOPMENT' | 'PRODUCTION' = ENV_VAR.toLowerCase() === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'
+const ENV_LABEL = CURRENT_ENV === 'DEVELOPMENT' ? 'Development' : 'Production'
+
+interface ApiKey {
+  id: string
+  keyPrefix: string
+  description: string | null
+  environment: string | null
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
 }
 
-const apiUsageData = [
-  { day: 'Mon', calls: 120 },
-  { day: 'Tue', calls: 98 },
-  { day: 'Wed', calls: 150 },
-  { day: 'Thu', calls: 80 },
-  { day: 'Fri', calls: 200 },
-  { day: 'Sat', calls: 60 },
-  { day: 'Sun', calls: 110 },
-]
+export default function ApiKeysPage() {
+  const [keys, setKeys] = useState<ApiKey[]>([])
+  const [partnerId, setPartnerId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [revoking, setRevoking] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null)
+  const [copied, setCopied] = useState<'public' | 'secret' | ''>('')
+  const [showRevokeModal, setShowRevokeModal] = useState(false)
+  const [revokeInput, setRevokeInput] = useState('')
+  const [revokeError, setRevokeError] = useState<string | null>(null)
 
-const apiKeyHistory = [
-  { key: 'pk_live_OLDKEY123456', created: '2024-05-01', status: 'Active' },
-  { key: 'pk_live_REVOKED7890', created: '2024-04-10', status: 'Revoked' },
-]
-
-function ApiKeysPage() {
-  const [publicKey, setPublicKey] = useState('pk_live_ABCDEF1234567890')
-  const [privateKey, setPrivateKey] = useState('')
-  const [showPrivate, setShowPrivate] = useState(false)
-  const [copied, setCopied] = useState('')
-  const [showWarning, setShowWarning] = useState(false)
-
-  const handleGenerate = () => {
-    const { publicKey, privateKey } = generateKeyPair()
-    setPublicKey(publicKey)
-    setPrivateKey(privateKey)
-    setShowPrivate(true)
-    setShowWarning(true)
-    setCopied('')
+  const loadProfile = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const profile = await getPartnerProfile()
+      setPartnerId(profile.partner?.id || null)
+      // Backend returns apiKeys at the top level of the profile object
+      const allKeys: ApiKey[] = profile.apiKeys || []
+      const envKeys = allKeys.filter((k) => (k.environment || 'PRODUCTION') === CURRENT_ENV)
+      setKeys(envKeys)
+    } catch (e: any) {
+      console.error('Failed to load partner profile', e)
+      setError(e.message || 'Failed to load API keys')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleCopy = (value: string, which: string) => {
+  useEffect(() => {
+    loadProfile()
+  }, [])
+
+  const handleGenerate = async () => {
+    if (!partnerId) {
+      setError('Partner not found for this user')
+      return
+    }
+    try {
+      setGenerating(true)
+      setError(null)
+      const res = await generateGatewayApiKey(partnerId, CURRENT_ENV)
+      const apiKey = res?.data?.apiKey as string | undefined
+      if (apiKey) {
+        setGeneratedKey(apiKey)
+      }
+      await loadProfile()
+    } catch (e: any) {
+      console.error('Failed to generate API key', e)
+      setError(e.message || 'Failed to generate API key')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleRevoke = async (keyId: string) => {
+    // Require exact phrase to avoid mistakes
+    if (revokeInput.trim().toLowerCase() !== 'revoke my api key') {
+      setRevokeError('Please type "revoke my api key" to confirm.')
+      return
+    }
+    try {
+      setRevoking(keyId)
+      setError(null)
+      setRevokeError(null)
+      await revokeGatewayApiKey(keyId, 'Revoked from partner dashboard')
+      await loadProfile()
+      setShowRevokeModal(false)
+      setRevokeInput('')
+    } catch (e: any) {
+      console.error('Failed to revoke API key', e)
+      setError(e.message || 'Failed to revoke API key')
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  const handleCopy = (value: string, which: 'public' | 'secret') => {
     navigator.clipboard.writeText(value)
     setCopied(which)
     setTimeout(() => setCopied(''), 1500)
   }
 
+  const hasActiveKey = keys.length > 0
+  const currentKey = keys[0] || null
+
+  const publicDisplay = currentKey ? `ak_${currentKey.keyPrefix}********` : 'No active key yet'
+
   return (
     <div className='flex flex-col min-h-screen bg-gray-50'>
-      <NavaBar />
-      <main className='flex-1 p-8 mx-auto w-full max-w-6xl'>
-        <div className='flex items-center gap-3 mb-6'>
-          <KeyRound className='text-[#08163d]' size={28} />
-          <h1 className='font-bold text-2xl text-[#08163d]'>API Keys</h1>
+      <main className='flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-5xl'>
+        <div className='flex items-center justify-between mb-6'>
+          <div className='flex items-center gap-3'>
+            <KeyRound className='text-[#08163d]' size={28} />
+            <div>
+              <h1 className='font-bold text-2xl text-[#08163d]'>API Keys</h1>
+              <p className='text-xs text-gray-500 mt-1'>Environment: <span className='font-semibold'>{ENV_LABEL}</span></p>
+            </div>
+          </div>
         </div>
-        {/* Key Management Section (moved to top) */}
-        <div className='bg-white rounded-xl shadow p-6 mb-8'>
+
+        {error && (
+          <div className='mb-4 bg-red-50 border border-red-200 text-red-700 text-xs rounded p-3'>
+            {error}
+          </div>
+        )}
+
+        {/* Key Management */}
+        <div className='bg-white rounded-xl shadow p-6 mb-6 relative'>
           <div className='flex flex-col gap-4'>
             <div>
-              <label className='block text-sm font-medium text-[#08163d] mb-1'>Public Key</label>
+              <label className='block text-sm font-medium text-[#08163d] mb-1'>Current {ENV_LABEL} API Key (public)</label>
               <div className='flex gap-2 items-center'>
-                <Input readOnly value={publicKey} className='font-mono text-xs' />
-                <Button type='button' variant='outline' size='icon' onClick={() => handleCopy(publicKey, 'public')}>
-                  <Copy size={18} />
-                </Button>
+                <Input readOnly value={publicDisplay} className='font-mono text-xs' />
+                {currentKey && (
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => handleCopy(publicDisplay, 'public')}
+                  >
+                    <Copy size={16} />
+                  </Button>
+                )}
                 {copied === 'public' && <span className='text-green-600 text-xs ml-2'>Copied!</span>}
               </div>
+              {currentKey && (
+                <p className='text-[11px] text-gray-500 mt-1'>
+                  Key prefix: <span className='font-mono'>{currentKey.keyPrefix}</span>
+                  {currentKey.expiresAt && (
+                    <> · Expires: {new Date(currentKey.expiresAt).toLocaleString()}</>
+                  )}
+                </p>
+              )}
             </div>
-            <div>
-              <Button type='button' onClick={handleGenerate} className='flex items-center gap-2'>
-                <KeyRound size={18} /> Generate New Key Pair
-              </Button>
-            </div>
-            {showPrivate && (
-              <div className='mt-4'>
-                <label className='block text-sm font-medium text-[#08163d] mb-1'>Private Key</label>
-                <div className='flex gap-2 items-center'>
-                  <Input readOnly value={privateKey} className='font-mono text-xs' type='text' />
-                  <Button type='button' variant='outline' size='icon' onClick={() => handleCopy(privateKey, 'private')}>
-                    <Copy size={18} />
-                  </Button>
-                  {copied === 'private' && <span className='text-green-600 text-xs ml-2'>Copied!</span>}
+
+            {generatedKey && (
+              <div className='mt-2 border rounded-lg border-yellow-300 bg-yellow-50 p-3 text-xs'>
+                <div className='flex items-center gap-2 mb-1'>
+                  <AlertTriangle className='text-yellow-600' size={16} />
+                  <span className='font-semibold text-yellow-800'>New API key generated (shown once)</span>
                 </div>
-                {showWarning && (
-                  <div className='flex items-center gap-2 mt-2 bg-yellow-50 border border-yellow-200 rounded p-2'>
-                    <AlertTriangle className='text-yellow-500' size={18} />
-                    <span className='text-yellow-700 text-xs'>This private key will only be shown once. Please copy and store it securely.</span>
-                  </div>
+                <div className='flex gap-2 items-center mt-1'>
+                  <Input
+                    readOnly
+                    value={generatedKey}
+                    className='font-mono text-xs'
+                  />
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => handleCopy(generatedKey, 'secret')}
+                  >
+                    <Copy size={16} />
+                  </Button>
+                  {copied === 'secret' && <span className='text-green-600 text-xs ml-2'>Copied!</span>}
+                </div>
+                <p className='text-[11px] text-yellow-800 mt-1'>
+                  Store this key securely. You will not be able to see it again after leaving this page.
+                </p>
+              </div>
+            )}
+
+            <div className='flex items-center justify-between mt-2'>
+              <div className='text-[11px] text-gray-500 max-w-md'>
+                You can have <b>only one active {ENV_LABEL.toLowerCase()} API key</b>. To generate a new one, revoke the existing key first.
+              </div>
+              <div className='flex gap-2'>
+                {currentKey && (
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    disabled={!!revoking}
+                    onClick={() => {
+                      setShowRevokeModal(true)
+                      setRevokeInput('')
+                      setRevokeError(null)
+                    }}
+                  >
+                    Revoke Key
+                  </Button>
                 )}
-                <div className='mt-2'>
-                  <Button type='button' variant='destructive' size='sm' onClick={() => { setShowPrivate(false); setShowWarning(false); setPrivateKey('') }}>
-                    I have copied my private key
+                <Button
+                  type='button'
+                  size='sm'
+                  onClick={handleGenerate}
+                  disabled={generating || hasActiveKey}
+                >
+                  {generating ? 'Generating...' : hasActiveKey ? 'Key Active' : 'Generate API Key'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Revoke confirmation modal */}
+          {showRevokeModal && currentKey && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+                <h2 className="font-semibold text-[#08163d] mb-2">Revoke API Key</h2>
+                <p className="text-xs text-gray-600 mb-3">
+                  This will permanently revoke your current {ENV_LABEL.toLowerCase()} API key
+                  ({currentKey.keyPrefix}). You will not be able to use it again.
+                </p>
+                <p className="text-xs text-gray-700 mb-2">
+                  To confirm, type <span className="font-mono bg-gray-100 px-1 rounded">revoke my api key</span> below:
+                </p>
+                <Input
+                  value={revokeInput}
+                  onChange={(e) => {
+                    setRevokeInput(e.target.value)
+                    setRevokeError(null)
+                  }}
+                  className="text-xs mb-2"
+                  placeholder="revoke my api key"
+                />
+                {revokeError && (
+                  <div className="text-[11px] text-red-600 mb-2">{revokeError}</div>
+                )}
+                <div className="flex justify-end gap-2 mt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowRevokeModal(false)
+                      setRevokeInput('')
+                      setRevokeError(null)
+                    }}
+                    disabled={!!revoking}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleRevoke(currentKey.id)}
+                    disabled={!!revoking}
+                  >
+                    {revoking === currentKey.id ? 'Revoking...' : 'Confirm Revoke'}
                   </Button>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-        {/* API Usage Examples */}
-        <div className='bg-white rounded-xl shadow p-6 mb-8'>
-          <div className='font-semibold text-[#08163d] mb-2'>How to Use Your API Keys</div>
-          <div className='mb-4'>
-            <div className='font-medium text-sm mb-1'>Send your <span className='text-blue-700'>public key</span> in API requests:</div>
-            <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto mb-2'>
-{`fetch('https://api.rukapay.com/v1/payments', {
-  headers: {
-    'Authorization': 'Bearer ${publicKey}'
-  }
-})
-.then(res => res.json())
-.then(data => console.log(data))`}
-            </pre>
-            <span className='text-xs text-gray-500'>The public key is sent in the <b>Authorization</b> header as a Bearer token.</span>
-          </div>
-          <div className='mb-2'>
-            <div className='font-medium text-sm mb-1'>How to use your <span className='text-yellow-700'>private key</span>:</div>
-            <div className='bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-yellow-800 mb-2'>
-              <b>Never send your private key over the network or include it in client-side code.</b> <br />
-              The private key is used for server-to-server authentication, signing webhooks, or secure backend operations only.
             </div>
-            <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto mb-2'>
-{`// Example: Using your private key to sign a webhook (Node.js)
-const crypto = require('crypto');
-const signature = crypto.createHmac('sha256', 'YOUR_PRIVATE_KEY')
-  .update(payload)
-  .digest('hex');`}
-            </pre>
-            <span className='text-xs text-gray-500'>Keep your private key secret and secure. Use it only on your backend server.</span>
-          </div>
+          )}
         </div>
-        {/* How to Use Signature Section */}
-        <div className='bg-white rounded-xl shadow p-6 mb-8'>
-          <div className='font-semibold text-[#08163d] mb-2'>How to Send a Signature with Your API Request</div>
-          <div className='mb-2 text-sm text-gray-700'>
-            For secure API operations, you may be required to sign your request using your <span className='font-semibold text-yellow-700'>private key</span>. The signature proves the authenticity and integrity of your request.
-          </div>
-          <div className='mb-2 text-xs text-gray-600'>
-            <b>Step 1:</b> Generate a signature on your backend using your private key and the request payload (or specific fields).
-          </div>
-          <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto mb-2'>
-{`// Node.js example
-const crypto = require('crypto');
 
-const payload = JSON.stringify({ amount: 1000, currency: 'UGX' });
-const privateKey = 'YOUR_PRIVATE_KEY';
-
-const signature = crypto
-  .createHmac('sha256', privateKey)
-  .update(payload)
-  .digest('hex');`}
-          </pre>
-          <div className='mb-2 text-xs text-gray-600'>
-            <b>Step 2:</b> Send the signature in your API request headers, along with your public key.
-          </div>
+        {/* How to use the key with backend structure */}
+        <div className='bg-white rounded-xl shadow p-6 mb-6'>
+          <div className='font-semibold text-[#08163d] mb-2'>How it works</div>
+          <ul className='text-xs text-gray-700 list-disc pl-4 space-y-1 mb-3'>
+            <li>Your API key is linked to this partner and the <b>{ENV_LABEL.toLowerCase()}</b> environment.</li>
+            <li>Only <b>one active key per environment</b> is allowed. Backend will reject duplicates.</li>
+            <li>Use this key in the <code className='bg-gray-100 px-1 rounded'>x-api-key</code> header when calling partner APIs.</li>
+          </ul>
+          <div className='mb-2 text-xs text-gray-600'>Example request:</div>
           <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto mb-2'>
-{`fetch('https://api.rukapay.com/v1/payments', {
+{`fetch('https://api.rukapay.com/api/v1/subscriber/validate-user', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer YOUR_PUBLIC_KEY',
-    'X-Signature': signature,
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'x-api-key': 'YOUR_API_KEY_HERE'
   },
-  body: payload
+  body: JSON.stringify({
+    phoneNumber: '2567XXXXXXXX',
+    channel: 'API'
+  })
 })
   .then(res => res.json())
   .then(data => console.log(data));`}
           </pre>
-          <div className='text-xs text-gray-500'>
-            <b>Note:</b> Never send your private key in the request. Only send the signature generated with it. The server will verify the signature to ensure the request is authentic.
-          </div>
+          <p className='text-[11px] text-gray-500'>Replace <code>YOUR_API_KEY_HERE</code> with the value shown when you generate a new key.</p>
         </div>
-        {/* Quick Start Code Snippet */}
-        <div className='bg-white rounded-xl shadow p-6 mb-8'>
-          <div className='font-semibold text-[#08163d] mb-2'>Quick Start</div>
-          <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto mb-2'>
-{`fetch('https://api.rukapay.com/v1/payments', {
-  headers: {
-    'Authorization': 'Bearer ${publicKey}'
-  }
-})
-.then(res => res.json())
-.then(data => console.log(data))`}
-          </pre>
-          <a href='https://docs.rukapay.com' target='_blank' rel='noopener noreferrer' className='text-blue-600 text-xs underline'>View full API documentation</a>
-        </div>
-        {/* Security Tips */}
+
+        {/* Security tips */}
         <div className='bg-yellow-50 border border-yellow-200 rounded-xl shadow p-6 mb-8 flex items-start gap-3'>
-          <AlertTriangle className='text-yellow-500 mt-1' size={22} />
+          <AlertTriangle className='text-yellow-500 mt-1' size={20} />
           <div>
-            <div className='font-semibold text-yellow-700 mb-1'>Security Tips</div>
-            <ul className='text-xs text-yellow-800 list-disc pl-4'>
-              <li>Never share your private key with anyone.</li>
-              <li>Store your private key in a secure password manager.</li>
-              <li>Regenerate your keys if you suspect compromise.</li>
-              <li>Use environment variables to store keys in your codebase.</li>
+            <div className='font-semibold text-yellow-700 mb-1'>Security tips</div>
+            <ul className='text-xs text-yellow-800 list-disc pl-4 space-y-1'>
+              <li>Never expose your API key in public frontend code.</li>
+              <li>Store keys in environment variables on your backend.</li>
+              <li>Rotate (revoke & generate) keys if you suspect compromise.</li>
+              <li>Use separate keys for development and production environments.</li>
             </ul>
           </div>
-        </div>
-        {/* API Key History */}
-        <div className='bg-white rounded-xl shadow p-6 mb-8'>
-          <div className='font-semibold text-[#08163d] mb-2'>API Key History</div>
-          <table className='w-full text-left text-xs'>
-            <thead>
-              <tr className='text-gray-500'>
-                <th className='py-2'>Public Key</th>
-                <th className='py-2'>Created</th>
-                <th className='py-2'>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {apiKeyHistory.map(row => (
-                <tr key={row.key} className='border-t last:border-b-0'>
-                  <td className='py-2 font-mono'>{row.key}</td>
-                  <td className='py-2'>{row.created}</td>
-                  <td className={`py-2 ${row.status === 'Active' ? 'text-green-600' : 'text-red-600'}`}>{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </main>
     </div>
   )
 }
-
-export default ApiKeysPage 

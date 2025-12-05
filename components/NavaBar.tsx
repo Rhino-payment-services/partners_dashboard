@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, HelpCircle, Settings, Search } from 'lucide-react'
+import { Settings, Search } from 'lucide-react'
 
 function NavaBar() {
   return (
@@ -17,16 +17,8 @@ function NavaBar() {
           />
         </div>
       </div>
-      {/* Right: Support, Notification, Settings, Avatar */}
+      {/* Right: Settings, Avatar */}
       <div className='flex items-center gap-4'>
-        {/* Support */}
-        <button className='w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors'>
-          <HelpCircle className='text-[#08163d]' size={22} />
-        </button>
-        {/* Notification */}
-        <button className='w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors'>
-          <Bell className='text-[#08163d]' size={22} />
-        </button>
         {/* Settings */}
         <button className='w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors'>
           <Settings className='text-[#08163d]' size={22} />
