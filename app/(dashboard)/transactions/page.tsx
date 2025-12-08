@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import { getPartnerTransactions } from "@/lib/api"
-import { ArrowUpDown, Loader2 } from "lucide-react"
+import { ArrowUpDown, Loader2, AlertCircle } from "lucide-react"
+import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
 
 interface PartnerTransaction {
   id: string
@@ -36,6 +37,7 @@ interface TransactionResponse {
 }
 
 export default function TransactionsPage() {
+  const { canViewTransactions, loading: permissionsLoading } = usePartnerPermissions()
   const [data, setData] = useState<TransactionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -142,6 +144,33 @@ export default function TransactionsPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  // Check permissions
+  if (permissionsLoading) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-50">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-7xl">
+          <div className="text-center py-8 text-gray-500">Loading...</div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!canViewTransactions) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-50">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-7xl">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-8 text-center">
+            <AlertCircle className="mx-auto mb-4 text-red-600" size={48} />
+            <h2 className="text-2xl font-bold text-red-800 dark:text-red-200 mb-2">Access Denied</h2>
+            <p className="text-red-600 dark:text-red-300">
+              You don't have permission to view transactions. Please contact your administrator.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
