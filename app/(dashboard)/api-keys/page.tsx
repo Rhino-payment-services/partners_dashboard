@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertTriangle, KeyRound, Copy } from 'lucide-react'
 import { getPartnerProfile, generateGatewayApiKey, revokeGatewayApiKey } from '@/lib/api'
+import { usePartnerPermissions } from '@/hooks/use-partner-permissions'
 
 const ENV_VAR = process.env.NEXT_PUBLIC_PARTNER_ENVIRONMENT || 'production'
 const CURRENT_ENV: 'DEVELOPMENT' | 'PRODUCTION' = ENV_VAR.toLowerCase() === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'
@@ -21,6 +22,7 @@ interface ApiKey {
 }
 
 export default function ApiKeysPage() {
+  const { canManageApiKeys, loading: permissionsLoading } = usePartnerPermissions()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [partnerId, setPartnerId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -109,6 +111,33 @@ export default function ApiKeysPage() {
   const currentKey = keys[0] || null
 
   const publicDisplay = currentKey ? `ak_${currentKey.keyPrefix}********` : 'No active key yet'
+
+  // Check permissions
+  if (permissionsLoading) {
+    return (
+      <div className='flex flex-col min-h-screen bg-gray-50'>
+        <main className='flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-5xl'>
+          <div className='text-center py-8 text-gray-500'>Loading...</div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!canManageApiKeys) {
+    return (
+      <div className='flex flex-col min-h-screen bg-gray-50'>
+        <main className='flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-5xl'>
+          <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-8 text-center'>
+            <AlertTriangle className='mx-auto mb-4 text-red-600' size={48} />
+            <h2 className='text-2xl font-bold text-red-800 dark:text-red-200 mb-2'>Access Denied</h2>
+            <p className='text-red-600 dark:text-red-300'>
+              You don't have permission to manage API keys. Please contact your administrator.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className='flex flex-col min-h-screen bg-gray-50'>

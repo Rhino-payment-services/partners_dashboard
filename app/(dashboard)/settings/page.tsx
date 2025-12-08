@@ -28,18 +28,15 @@ export default function Settings() {
     setError('')
     setMessage('')
 
-    // If no new password is provided, keep the current one (don't change it)
+    // Require new password to change
     if (!newPassword || newPassword.trim() === '') {
-      setMessage('No password change requested. Current password will remain unchanged.')
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
+      setError('New password is required to change password')
       return
     }
 
-    // Validation - if new password is provided, it must be at least 6 characters
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long')
+    // Validation - if new password is provided, it must be at least 8 characters
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long')
       return
     }
 
@@ -63,8 +60,8 @@ export default function Settings() {
         throw new Error('Not authenticated')
       }
 
-      const response = await fetch(`${API_BASE_URL}/partner-auth/change-password`, {
-        method: 'PATCH',
+      const response = await fetch(`${API_BASE_URL}/partner/members/change-password`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
@@ -126,7 +123,7 @@ export default function Settings() {
                 placeholder="Enter your current password (required if changing password)"
               />
               <p className="text-xs text-gray-500 mt-1">
-                If no password is set, use: <code className="bg-gray-100 px-1 rounded">password@123</code>
+                Enter your current password to verify your identity
               </p>
             </div>
 
@@ -140,11 +137,11 @@ export default function Settings() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Leave empty to keep current password (min 6 characters if provided)"
-                minLength={6}
+                    placeholder="Leave empty to keep current password (min 8 characters if provided)"
+                    minLength={8}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Leave empty to keep your current password unchanged
+                Password must be at least 8 characters long
               </p>
             </div>
 
@@ -158,17 +155,17 @@ export default function Settings() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your new password (must match exactly)"
-                minLength={6}
+                    placeholder="Confirm your new password (must match exactly)"
+                    minLength={8}
               />
             </div>
 
             <Button
               type="submit"
-              disabled={loading || (!!newPassword && (!currentPassword || !confirmPassword))}
+              disabled={loading || !currentPassword || !newPassword || !confirmPassword}
               className="w-full"
             >
-              {loading ? 'Changing Password...' : newPassword ? 'Change Password' : 'Keep Current Password'}
+              {loading ? 'Changing Password...' : 'Change Password'}
             </Button>
           </form>
         </div>
