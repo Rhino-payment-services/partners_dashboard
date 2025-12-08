@@ -1,5 +1,5 @@
 "use client"
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Sidebar,
   SidebarContent,
@@ -16,12 +16,48 @@ import {
   Settings,
   LogOut,
   KeyRound,
-  BookOpen
+  BookOpen,
+  Users
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { getPartnerProfile } from '@/lib/api'
 
 function SideBar() {
+  const [permissions, setPermissions] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadPermissions = async () => {
+      try {
+        const profile = await getPartnerProfile()
+        setPermissions(profile.permissions || {
+          canViewTransactions: true,
+          canManageApiKeys: true,
+          canViewAnalytics: true,
+          canManageMembers: true,
+          canConfigureTariffs: true,
+        })
+      } catch (error) {
+        console.error('Failed to load permissions', error)
+        setPermissions({
+          canViewTransactions: false,
+          canManageApiKeys: false,
+          canViewAnalytics: false,
+          canManageMembers: false,
+          canConfigureTariffs: false,
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadPermissions()
+  }, [])
+
+  if (loading) {
+    return null // Don't show sidebar while loading permissions
+  }
 
   return (
     <Sidebar collapsible="offcanvas" className="border-none">
@@ -42,22 +78,36 @@ function SideBar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem className="mb-3 last:mb-0">
-              <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                <Link href="/transactions" className="flex items-center gap-2 md:gap-3 w-full">
-                  <Activity className="mr-1 md:mr-2" size={18} />
-                  <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Transactions</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem className="mb-3 last:mb-0">
-              <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                <Link href="/api-keys" className="flex items-center gap-2 md:gap-3 w-full">
-                  <KeyRound className="mr-1 md:mr-2" size={18} />
-                  <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">API Keys</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {permissions?.canViewTransactions && (
+              <SidebarMenuItem className="mb-3 last:mb-0">
+                <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
+                  <Link href="/transactions" className="flex items-center gap-2 md:gap-3 w-full">
+                    <Activity className="mr-1 md:mr-2" size={18} />
+                    <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Transactions</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {permissions?.canManageApiKeys && (
+              <SidebarMenuItem className="mb-3 last:mb-0">
+                <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
+                  <Link href="/api-keys" className="flex items-center gap-2 md:gap-3 w-full">
+                    <KeyRound className="mr-1 md:mr-2" size={18} />
+                    <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">API Keys</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {permissions?.canManageMembers && (
+              <SidebarMenuItem className="mb-3 last:mb-0">
+                <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
+                  <Link href="/members" className="flex items-center gap-2 md:gap-3 w-full">
+                    <Users className="mr-1 md:mr-2" size={18} />
+                    <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Members</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem className="mb-3 last:mb-0">
               <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
                 <Link href="/settings" className="flex items-center gap-2 md:gap-3 w-full">
