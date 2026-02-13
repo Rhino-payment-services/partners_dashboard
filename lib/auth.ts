@@ -20,11 +20,14 @@ export const isAuthenticated = (): boolean => {
   return !!getAccessToken()
 }
 
-export const logout = () => {
+export const logout = (returnUrl?: string) => {
   if (typeof window === 'undefined') return
   localStorage.removeItem('accessToken')
   localStorage.removeItem('refreshToken')
   localStorage.removeItem('user')
-  window.location.href = '/auth/login'
+  const url = returnUrl
+    ? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`
+    : '/auth/login'
+  window.location.href = url
 }
 
