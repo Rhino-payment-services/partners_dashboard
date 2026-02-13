@@ -17,10 +17,10 @@ import {
   LogOut,
   KeyRound,
   BookOpen,
-  Users
+  Users,
+  CreditCard
 } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { getPartnerProfile } from '@/lib/api'
 
 function SideBar() {
@@ -63,16 +63,17 @@ function SideBar() {
     <Sidebar collapsible="offcanvas" className="border-none">
         <SidebarHeader className="flex py-4 px-4 md:px-8 h-16 bg-[#08163d] text-white border-b border-white gap-2">
           <div className='flex items-center gap-2'>
-
-           <Image src="/images/logo.jpg" alt="RukaPay" width={32} height={32}   className='rounded-lg' />
-           <span className='text-white text-base md:text-lg font-bold'>RukaPay</span>
+            <div className="w-9 h-9 rounded-lg bg-amber-400 flex items-center justify-center">
+              <CreditCard className="text-[#08163d]" size={20} />
+            </div>
+            <span className='text-white text-base md:text-lg font-bold'>RukaPay</span>
           </div>
         </SidebarHeader>
           <SidebarContent className="flex-1 px-2 md:px-4 text-[#08163d] bg-white py-5">
           <SidebarMenu>
             <SidebarMenuItem className="mb-3 last:mb-0">
               <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                <Link href="/" className="flex items-center gap-2 md:gap-3 w-full">
+                <Link href="/dashboard" className="flex items-center gap-2 md:gap-3 w-full">
                   <LayoutDashboard className="mr-1 md:mr-2" size={18} />
                   <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Dashboard</span>
                 </Link>
@@ -81,7 +82,7 @@ function SideBar() {
             {permissions?.canViewTransactions && (
               <SidebarMenuItem className="mb-3 last:mb-0">
                 <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                  <Link href="/transactions" className="flex items-center gap-2 md:gap-3 w-full">
+                  <Link href="/dashboard/transactions" className="flex items-center gap-2 md:gap-3 w-full">
                     <Activity className="mr-1 md:mr-2" size={18} />
                     <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Transactions</span>
                   </Link>
@@ -91,7 +92,7 @@ function SideBar() {
             {permissions?.canManageApiKeys && (
               <SidebarMenuItem className="mb-3 last:mb-0">
                 <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                  <Link href="/api-keys" className="flex items-center gap-2 md:gap-3 w-full">
+                  <Link href="/dashboard/api-keys" className="flex items-center gap-2 md:gap-3 w-full">
                     <KeyRound className="mr-1 md:mr-2" size={18} />
                     <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">API Keys</span>
                   </Link>
@@ -101,7 +102,7 @@ function SideBar() {
             {permissions?.canManageMembers && (
               <SidebarMenuItem className="mb-3 last:mb-0">
                 <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                  <Link href="/members" className="flex items-center gap-2 md:gap-3 w-full">
+                  <Link href="/dashboard/members" className="flex items-center gap-2 md:gap-3 w-full">
                     <Users className="mr-1 md:mr-2" size={18} />
                     <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Members</span>
                   </Link>
@@ -110,7 +111,7 @@ function SideBar() {
             )}
             <SidebarMenuItem className="mb-3 last:mb-0">
               <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                <Link href="/settings" className="flex items-center gap-2 md:gap-3 w-full">
+                <Link href="/dashboard/settings" className="flex items-center gap-2 md:gap-3 w-full">
                   <Settings className="mr-1 md:mr-2" size={18} />
                   <span className='font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]'>Settings</span>
                 </Link>
@@ -119,7 +120,7 @@ function SideBar() {
             {/* Documentation */}
             <SidebarMenuItem className="mb-3 last:mb-0">
               <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
-                <Link href="/documentation" className="flex items-center gap-2 md:gap-3 w-full">
+                <Link href="/dashboard/documentation" className="flex items-center gap-2 md:gap-3 w-full">
                   <BookOpen className="mr-1 md:mr-2" size={18} />
                   <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Documentation</span>
                 </Link>

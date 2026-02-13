@@ -81,7 +81,7 @@ export default function Login() {
 
       // Redirect to dashboard or return URL
       const urlParams = new URLSearchParams(window.location.search)
-      const returnUrl = urlParams.get('returnUrl') || '/'
+      const returnUrl = urlParams.get('returnUrl') || '/dashboard'
       window.location.href = returnUrl
     } catch (err: any) {
       setError(err.message || 'Login failed')
