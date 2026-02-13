@@ -124,3 +124,27 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Marquee infinite scroll animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  gap: 2.5rem;
+  width: max-content;
+  /* Slower on mobile (45s) so all logos show; faster on desktop (20s) */
+  animation: marquee 45s linear infinite;
+}
+
+@media (min-width: 768px) {
+  .animate-marquee {
+    animation-duration: 20s;
+  }
+}

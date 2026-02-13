@@ -1,6 +1,6 @@
 'use client'
 
-import { getAccessToken } from './auth'
+import { getAccessToken, logout } from './auth'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
 
@@ -28,6 +28,13 @@ export async function apiRequest(
     ...options,
     headers,
   })
+
+  // On 401 Unauthorized - logout and redirect to login
+  if (response.status === 401) {
+    const returnUrl = typeof window !== 'undefined' ? window.location.pathname : undefined
+    logout(returnUrl)
+    throw new Error('Session expired. Please log in again.')
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Request failed' }))
@@ -79,6 +86,67 @@ export async function getPartnerTransactions(params?: {
 
 export async function getPartnerTransactionVolume(days: number = 7) {
   return apiRequest(`/partner-auth/transaction-volume?days=${days}`, {
+    method: 'GET',
+  })
+}
+
+export async function getCustomerCount(startDate: string, endDate: string) {
+  const query = new URLSearchParams()
+  query.set('startDate', startDate)
+  query.set('endDate', endDate)
+  return apiRequest(`/partner-auth/customer-count?${query.toString()}`, {
+    method: 'GET',
+  })
+}
+
+export async function getTransactionVolume(params: {
+  startDate: string
+  endDate: string
+  status?: string
+  currency?: string
+}) {
+  const query = new URLSearchParams()
+  query.set('startDate', params.startDate)
+  query.set('endDate', params.endDate)
+  if (params.status) query.set('status', params.status)
+  if (params.currency) query.set('currency', params.currency)
+  return apiRequest(`/partner-auth/transaction-volume?${query.toString()}`, {
+    method: 'GET',
+  })
+}
+
+export async function getTransactionsByGender(params: {
+  startDate: string
+  endDate: string
+  status?: string
+  currency?: string
+}) {
+  const query = new URLSearchParams()
+  query.set('startDate', params.startDate)
+  query.set('endDate', params.endDate)
+  if (params.status) query.set('status', params.status)
+  if (params.currency) query.set('currency', params.currency)
+  return apiRequest(`/partner-auth/transactions-by-gender?${query.toString()}`, {
+    method: 'GET',
+  })
+}
+
+export async function getTransactionsByAmountBands(params: {
+  startDate: string
+  endDate: string
+  status?: string
+  currency?: string
+  amountBands?: Array<{ minAmount: number; maxAmount: number }>
+}) {
+  const query = new URLSearchParams()
+  query.set('startDate', params.startDate)
+  query.set('endDate', params.endDate)
+  if (params.status) query.set('status', params.status)
+  if (params.currency) query.set('currency', params.currency)
+  if (params.amountBands) {
+    query.set('amountBands', JSON.stringify(params.amountBands))
+  }
+  return apiRequest(`/partner-auth/transactions-by-amount-bands?${query.toString()}`, {
     method: 'GET',
   })
 }
