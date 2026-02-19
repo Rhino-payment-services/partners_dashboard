@@ -99,7 +99,7 @@ export function getApiBaseUrl(): string {
  */
 export function getApiBaseUrlWithV1(): string {
   const base = getApiBaseUrl()
-  return base.includes('/api/v1') ? base : `${base}/api/v1`
+  return `${base}`
 }
 
 /**
