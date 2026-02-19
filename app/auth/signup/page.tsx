@@ -7,15 +7,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, AlertCircle, Loader2, Lock } from 'lucide-react'
-import { isSignupAllowed } from '@/lib/env'
-
-// Ensure API_BASE_URL includes /api/v1
-const getApiBaseUrl = () => {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-  // If it already includes /api/v1, use it as is, otherwise append it
-  return envUrl.includes('/api/v1') ? envUrl : `${envUrl}/api/v1`
-}
-const API_BASE_URL = getApiBaseUrl()
+import { isSignupAllowed, getApiBaseUrlWithV1 } from '@/lib/env'
 
 interface FormData {
   partnerName: string
@@ -145,7 +137,7 @@ export default function Signup() {
       if (formData.address) requestData.address = formData.address
       if (formData.description) requestData.description = formData.description
 
-      const response = await fetch(`${API_BASE_URL}/gateway/partners/signup`, {
+      const response = await fetch(`${getApiBaseUrlWithV1()}/gateway/partners/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
