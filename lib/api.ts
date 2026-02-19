@@ -1,15 +1,15 @@
 'use client'
 
 import { getAccessToken, logout } from './auth'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
+import { getApiBaseUrlWithV1 } from './env'
 
 export async function apiRequest(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<any> {
   const token = getAccessToken()
-  
+  const API_BASE_URL = getApiBaseUrlWithV1()
+
   // Convert options.headers to a plain object if it's a Headers instance
   const existingHeaders: Record<string, string> = options.headers instanceof Headers
     ? Object.fromEntries(options.headers.entries())

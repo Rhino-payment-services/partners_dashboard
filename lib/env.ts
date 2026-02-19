@@ -68,19 +68,38 @@ export function getEnvironment(): 'development' | 'production' | 'staging' {
 }
 
 /**
- * Get the API base URL based on environment
- * Production: https://api.rukapay.net/
- * Development: https://dev-api.rukapay.net/
+ * Get the API base URL (origin, no path) based on environment.
+ * No NEXT_PUBLIC_PARTNER_ENVIRONMENT needed: client uses hostname, server uses NODE_ENV.
+ * Production hostname / NODE_ENV=production → NEXT_PUBLIC_API_URL
+ * Localhost / NODE_ENV=development → NEXT_PUBLIC_API_URL_LOCAL
+ * Dev subdomain etc. → NEXT_PUBLIC_API_URL_DEV
  */
 export function getApiBaseUrl(): string {
-  const env = getEnvironment()
-  
-  if (env === 'production') {
-    return 'https://api.rukapay.net'
+  if (typeof window === 'undefined') {
+    // Server-side: use NODE_ENV (e.g. next dev → local API, next start in prod → production API)
+    if (process.env.NODE_ENV === 'production') {
+      return process.env.NEXT_PUBLIC_API_URL || 'https://api.rukapay.net'
+    }
+    return process.env.NEXT_PUBLIC_API_URL_LOCAL || 'http://localhost:8000'
   }
-  
-  // Development and staging use dev API
-  return 'https://dev-api.rukapay.net'
+
+  // Client-side: use hostname only
+  const hostname = window.location.hostname
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return process.env.NEXT_PUBLIC_API_URL_LOCAL || 'http://localhost:8000'
+  }
+  if (hostname === 'partners.rukapay.co.ug') {
+    return process.env.NEXT_PUBLIC_API_URL || 'https://api.rukapay.net'
+  }
+  return process.env.NEXT_PUBLIC_API_URL_DEV || 'https://dev-api.rukapay.net'
+}
+
+/**
+ * Get the API base URL with /api/v1 (for partner-auth, gateway, etc.)
+ */
+export function getApiBaseUrlWithV1(): string {
+  const base = getApiBaseUrl()
+  return base.includes('/api/v1') ? base : `${base}/api/v1`
 }
 
 /**

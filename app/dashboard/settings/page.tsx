@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
+import { getApiBaseUrlWithV1 } from '@/lib/env'
 
 export default function Settings() {
   const [currentPassword, setCurrentPassword] = useState('')
@@ -60,7 +59,7 @@ export default function Settings() {
         throw new Error('Not authenticated')
       }
 
-      const response = await fetch(`${API_BASE_URL}/partner/members/change-password`, {
+      const response = await fetch(`${getApiBaseUrlWithV1()}/partner/members/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -4,8 +4,7 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Image from 'next/image'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
+import { getApiBaseUrlWithV1 } from '@/lib/env'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -24,7 +23,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/partner-auth/send-otp`, {
+      const response = await fetch(`${getApiBaseUrlWithV1()}/partner-auth/send-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +57,7 @@ export default function Login() {
         ? { email, otp }
         : { email, password }
 
-      const response = await fetch(`${API_BASE_URL}/partner-auth/login`, {
+      const response = await fetch(`${getApiBaseUrlWithV1()}/partner-auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +95,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/partner-auth/send-otp`, {
+      const response = await fetch(`${getApiBaseUrlWithV1()}/partner-auth/send-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
