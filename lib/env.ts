@@ -100,6 +100,7 @@ export function getApiBaseUrl(): string {
 export function getApiBaseUrlWithV1(): string {
   const base = getApiBaseUrl()
   return `${base}`
+  
 }
 
 /**
