@@ -1,33 +1,35 @@
-"use client"
+ "use client"
 
-import React, { useEffect, useState, useCallback } from "react"
-import { getPartnerTransactions } from "@/lib/api"
-import { ArrowUpDown, Loader2, AlertCircle } from "lucide-react"
-import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
+ import React, { useEffect, useState, useCallback } from "react"
+ import { getPartnerTransactions } from "@/lib/api"
+ import { ArrowUpDown, Loader2, AlertCircle, Eye } from "lucide-react"
+ import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
 
-interface PartnerTransaction {
-  id: string
-  reference: string | null
-  externalReference: string | null
-  externalId?: string | null
-  type: string
-  status: string
-  amount: number
-  currency: string
-  fee: number
-  netAmount: number
-  direction: string | null
-  mode: string | null
-  channel: string | null
-  description: string | null
-  recipientAccount?: string | null
-  recipientName?: string | null
-  providerName?: string | null
-  providerType?: string | null
-  partnerReference?: string | null
-  createdAt: string
-  processedAt: string | null
-}
+ interface PartnerTransaction {
+   id: string
+   reference: string | null
+   externalReference: string | null
+   externalId?: string | null
+   type: string
+   status: string
+   amount: number
+   currency: string
+   fee: number
+   netAmount: number
+   direction: string | null
+   mode: string | null
+   channel: string | null
+   description: string | null
+   recipientAccount?: string | null
+   recipientName?: string | null
+   providerName?: string | null
+   providerType?: string | null
+   partnerReference?: string | null
+   createdAt: string
+   processedAt: string | null
+   // Optional metadata payload from backend (PARTNER_COLLECT, etc.)
+   metadata?: any
+ }
 
 interface TransactionResponse {
   items: PartnerTransaction[]
@@ -36,26 +38,29 @@ interface TransactionResponse {
   pageSize: number
 }
 
-export default function TransactionsPage() {
-  const { canViewTransactions, loading: permissionsLoading } = usePartnerPermissions()
-  const [data, setData] = useState<TransactionResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  const [statusFilter, setStatusFilter] = useState<string>("")
-  const [typeFilter, setTypeFilter] = useState<string>("")
-  const [directionFilter, setDirectionFilter] = useState<string>("")
-  const [channelFilter, setChannelFilter] = useState<string>("")
-  const [search, setSearch] = useState<string>("")
-  const [minAmount, setMinAmount] = useState<string>("")
-  const [maxAmount, setMaxAmount] = useState<string>("")
-  const [fromDate, setFromDate] = useState<string>("")
-  const [toDate, setToDate] = useState<string>("")
+ export default function TransactionsPage() {
+   const { canViewTransactions, loading: permissionsLoading } = usePartnerPermissions()
+   const [data, setData] = useState<TransactionResponse | null>(null)
+   const [loading, setLoading] = useState(true)
+   const [error, setError] = useState<string | null>(null)
+   const [page, setPage] = useState(1)
+   const [pageSize, setPageSize] = useState(20)
+   const [statusFilter, setStatusFilter] = useState<string>("")
+   const [typeFilter, setTypeFilter] = useState<string>("")
+   const [directionFilter, setDirectionFilter] = useState<string>("")
+   const [channelFilter, setChannelFilter] = useState<string>("")
+   const [search, setSearch] = useState<string>("")
+   const [minAmount, setMinAmount] = useState<string>("")
+   const [maxAmount, setMaxAmount] = useState<string>("")
+   const [fromDate, setFromDate] = useState<string>("")
+   const [toDate, setToDate] = useState<string>("")
+   // Transaction details modal state
+   const [showDetailsModal, setShowDetailsModal] = useState(false)
+   const [selectedTx, setSelectedTx] = useState<PartnerTransaction | null>(null)
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
+   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
 
-  const fetchTransactions = useCallback(async () => {
+   const fetchTransactions = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -326,6 +331,7 @@ export default function TransactionsPage() {
                       <th className="py-2 pr-4">Provider</th>
                       <th className="py-2 pr-4">Status</th>
                       <th className="py-2 pr-4">Channel</th>
+                      <th className="py-2 pr-4">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -408,6 +414,19 @@ export default function TransactionsPage() {
                           </span>
                         </td>
                         <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.channel || "—"}</td>
+                        <td className="py-2 pr-4 align-top text-xs">
+                          <button
+                            className="px-2 py-1 border rounded-md text-[11px] text-[#08163d] hover:bg-gray-50 flex items-center gap-1"
+                            type="button"
+                            onClick={() => {
+                              setSelectedTx(tx)
+                              setShowDetailsModal(true)
+                            }}
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -452,7 +471,216 @@ export default function TransactionsPage() {
             </>
           )}
         </div>
+
+        {/* Transaction details modal */}
+        {showDetailsModal && selectedTx && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="font-semibold text-lg text-[#08163d]">Transaction Details</h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {selectedTx.reference || selectedTx.externalReference || selectedTx.id}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                  onClick={() => {
+                    setShowDetailsModal(false)
+                    setSelectedTx(null)
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Basic info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-700 mb-4">
+                <div>
+                  <div className="text-gray-500">Type</div>
+                  <div className="font-mono">{selectedTx.type}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Mode</div>
+                  <div className="font-mono">{selectedTx.mode || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Direction</div>
+                  <div>{selectedTx.direction || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Status</div>
+                  <div className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">
+                    {selectedTx.status}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Amount</div>
+                  <div className="font-semibold">
+                    {selectedTx.currency} {selectedTx.amount.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Fee / Net</div>
+                  <div>
+                    Fee: {selectedTx.currency} {selectedTx.fee.toLocaleString()}
+                    <br />
+                    Net: {selectedTx.currency} {selectedTx.netAmount.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Provider</div>
+                  <div>
+                    {selectedTx.providerName || "—"}
+                    {selectedTx.providerType && (
+                      <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">
+                        {selectedTx.providerType}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Channel</div>
+                  <div>{selectedTx.channel || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Recipient</div>
+                  <div>{selectedTx.recipientAccount || "—"}</div>
+                  <div className="text-[11px] text-gray-500">
+                    {selectedTx.recipientName || "N/A"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Partner Reference</div>
+                  <div className="font-mono text-[11px]">
+                    {selectedTx.partnerReference || "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Created At</div>
+                  <div>
+                    {new Date(selectedTx.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                {selectedTx.processedAt && (
+                  <div>
+                    <div className="text-gray-500">Processed At</div>
+                    <div>
+                      {new Date(selectedTx.processedAt).toLocaleString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Metadata / MNO details */}
+              {selectedTx.metadata && (
+                <div className="mb-4">
+                  <h3 className="font-semibold text-sm text-[#08163d] mb-2">Metadata</h3>
+                  {(() => {
+                    const meta: any = selectedTx.metadata || {}
+                    const mnoProvider = meta.mnoProvider || selectedTx.providerName || meta.partnerCode
+                    // Prefer true external MNO data; do not treat partnerMetadata as external data
+                    const rawExternalData = meta.externalData || meta.externalMetadata
+                    const externalData =
+                      rawExternalData && typeof rawExternalData === "object" && Object.keys(rawExternalData).length > 0
+                        ? rawExternalData
+                        : null
+                    const partnerMetadata =
+                      meta.partnerMetadata && typeof meta.partnerMetadata === "object" && Object.keys(meta.partnerMetadata).length > 0
+                        ? meta.partnerMetadata
+                        : null
+
+                    const airtelMoneyId =
+                      meta.airtelMoneyId ||
+                      (externalData && externalData.airtelMoneyId) ||
+                      meta.airtel_money_id
+                    const externalMessage =
+                      (externalData && externalData.message) ||
+                      meta.externalMessage ||
+                      meta.airtelMessage
+
+                    return (
+                      <div className="space-y-2 text-xs text-gray-700">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {mnoProvider && (
+                            <div>
+                              <div className="text-gray-500">MNO Provider</div>
+                              <div className="font-mono">{mnoProvider}</div>
+                            </div>
+                          )}
+                          {meta.phoneNumber && (
+                            <div>
+                              <div className="text-gray-500">Phone Number</div>
+                              <div>{meta.phoneNumber}</div>
+                            </div>
+                          )}
+                          {airtelMoneyId && (
+                            <div>
+                              <div className="text-gray-500">Airtel Money ID</div>
+                              <div className="font-mono">{airtelMoneyId}</div>
+                            </div>
+                          )}
+                          {externalMessage && (
+                            <div className="md:col-span-2">
+                              <div className="text-gray-500">External Message</div>
+                              <div className="text-gray-700">{externalMessage}</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Raw externalData: MNO / gateway external response */}
+                        {externalData && (
+                          <div className="mt-2">
+                            <div className="text-gray-500 mb-1">External Data</div>
+                            <pre className="bg-gray-50 border border-gray-200 rounded-md p-2 text-[10px] overflow-x-auto">
+                              {JSON.stringify(externalData, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+
+                        {/* Partner metadata (wallet_id, internal_id, etc.) */}
+                        {partnerMetadata && (
+                          <div className="mt-2">
+                            <div className="text-gray-500 mb-1">Partner Metadata</div>
+                            <pre className="bg-gray-50 border border-gray-200 rounded-md p-2 text-[10px] overflow-x-auto">
+                              {JSON.stringify(partnerMetadata, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+
+                        {/* Full metadata (collapsed) */}
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-[11px] text-gray-500">
+                            Show full metadata JSON
+                          </summary>
+                          <pre className="bg-gray-50 border border-gray-200 rounded-md p-2 text-[10px] overflow-x-auto mt-1">
+                            {JSON.stringify(meta, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="px-3 py-1 text-xs border rounded-md text-gray-600 hover:bg-gray-50"
+                  onClick={() => {
+                    setShowDetailsModal(false)
+                    setSelectedTx(null)
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   )
-}
+ }
