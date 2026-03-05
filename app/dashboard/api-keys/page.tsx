@@ -7,7 +7,7 @@ import { AlertTriangle, KeyRound, Copy } from 'lucide-react'
 import { getPartnerProfile, generateGatewayApiKey, revokeGatewayApiKey } from '@/lib/api'
 import { usePartnerPermissions } from '@/hooks/use-partner-permissions'
 
-const ENV_VAR = process.env.NEXT_PUBLIC_PARTNER_ENVIRONMENT || 'production'
+const ENV_VAR = 'development'
 const CURRENT_ENV: 'DEVELOPMENT' | 'PRODUCTION' = ENV_VAR.toLowerCase() === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'
 const ENV_LABEL = CURRENT_ENV === 'DEVELOPMENT' ? 'Development' : 'Production'
 
