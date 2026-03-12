@@ -166,3 +166,50 @@ export async function revokeGatewayApiKey(keyId: string, reason: string) {
     body: JSON.stringify({ reason }),
   })
 }
+
+// ─── Partner Reversal Requests (Gateway) ───────────────────────────────────────
+
+export type PartnerReversalStatus =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELLED'
+
+export async function submitPartnerReversalRequest(input: {
+  transactionId: string
+  reason: string
+  details?: string
+}) {
+  // Backend: POST /api/v1/gateway/reversal-requests (SubmitReversalRequestDto)
+  return apiRequest('/api/v1/gateway/reversal-requests', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function listPartnerReversalRequests(params?: {
+  page?: number
+  limit?: number
+  status?: PartnerReversalStatus
+}) {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.limit) query.set('limit', String(params.limit))
+  if (params?.status) query.set('status', params.status)
+
+  const qs = query.toString()
+  const endpoint = qs
+    ? `/api/v1/gateway/reversal-requests?${qs}`
+    : '/api/v1/gateway/reversal-requests'
+
+  return apiRequest(endpoint, {
+    method: 'GET',
+  })
+}
+
+export async function cancelPartnerReversalRequest(requestId: string) {
+  // Backend: PATCH /api/v1/gateway/reversal-requests/:requestId/cancel
+  return apiRequest(`/api/v1/gateway/reversal-requests/${requestId}/cancel`, {
+    method: 'PATCH',
+  })
+}

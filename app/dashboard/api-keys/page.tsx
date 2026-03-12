@@ -9,7 +9,9 @@ import { usePartnerPermissions } from '@/hooks/use-partner-permissions'
 
 const ENV_VAR = 'development'
 const CURRENT_ENV: 'DEVELOPMENT' | 'PRODUCTION' = ENV_VAR.toLowerCase() === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'
-const ENV_LABEL = CURRENT_ENV === 'DEVELOPMENT' ? 'Development' : 'Production'
+const hostname = window.location.hostname
+// const ENV_LABEL = CURRENT_ENV === 'DEVELOPMENT' ? 'Development' : 'Production'
+const ENV_LABEL = hostname === 'partners.rukapay.co.ug' ? 'Production' : 'Development'
 
 interface ApiKey {
   id: string

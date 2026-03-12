@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useEffect, useState, useCallback } from "react"
-import { getPartnerTransactions } from "@/lib/api"
-import { ArrowUpDown, Loader2, AlertCircle } from "lucide-react"
+import { getPartnerTransactions, submitPartnerReversalRequest } from "@/lib/api"
+import { ArrowUpDown, Loader2, AlertCircle, RotateCcw } from "lucide-react"
 import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
 
 interface PartnerTransaction {
@@ -52,6 +52,15 @@ export default function TransactionsPage() {
   const [maxAmount, setMaxAmount] = useState<string>("")
   const [fromDate, setFromDate] = useState<string>("")
   const [toDate, setToDate] = useState<string>("")
+
+  // Reversal popup state
+  const [reversalOpen, setReversalOpen] = useState(false)
+  const [reversalTx, setReversalTx] = useState<PartnerTransaction | null>(null)
+  const [reversalReason, setReversalReason] = useState("")
+  const [reversalDetails, setReversalDetails] = useState("")
+  const [reversalSubmitting, setReversalSubmitting] = useState(false)
+  const [reversalError, setReversalError] = useState<string | null>(null)
+  const [reversalSuccess, setReversalSuccess] = useState<string | null>(null)
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
 
@@ -144,6 +153,44 @@ export default function TransactionsPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  const openReversalPopup = (tx: PartnerTransaction) => {
+    setReversalTx(tx)
+    setReversalReason("")
+    setReversalDetails("")
+    setReversalError(null)
+    setReversalSuccess(null)
+    setReversalOpen(true)
+  }
+
+  const submitReversal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!reversalTx || !reversalReason.trim()) return
+    try {
+      setReversalSubmitting(true)
+      setReversalError(null)
+      setReversalSuccess(null)
+      await submitPartnerReversalRequest({
+        transactionId: reversalTx.id,
+        reason: reversalReason.trim(),
+        details: reversalDetails.trim() || undefined,
+      })
+      setReversalSuccess("Reversal request submitted successfully. You can track it under Reversal Requests.")
+      // Optionally refresh transactions so latest state is visible
+      await fetchTransactions()
+      // Close the modal after a short delay so the user sees the success state
+      setTimeout(() => {
+        setReversalOpen(false)
+      }, 1200)
+    } catch (err: any) {
+      console.error("Failed to submit reversal request", err)
+      setReversalError(
+        err?.message || "Failed to submit reversal request. Please try again."
+      )
+    } finally {
+      setReversalSubmitting(false)
+    }
   }
 
   // Check permissions
@@ -326,6 +373,7 @@ export default function TransactionsPage() {
                       <th className="py-2 pr-4">Provider</th>
                       <th className="py-2 pr-4">Status</th>
                       <th className="py-2 pr-4">Channel</th>
+                      <th className="py-2 pr-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -408,6 +456,16 @@ export default function TransactionsPage() {
                           </span>
                         </td>
                         <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.channel || "—"}</td>
+                        <td className="py-2 pr-4 align-top text-xs text-right">
+                          <button
+                            type="button"
+                            onClick={() => openReversalPopup(tx)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-[11px] text-[#08163d] hover:bg-gray-50"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Reverse
+                          </button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -453,6 +511,108 @@ export default function TransactionsPage() {
           )}
         </div>
       </main>
+      {/* Reversal popup */}
+      {reversalOpen && reversalTx && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[#08163d] flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                Request Reversal
+              </h2>
+              <button
+                type="button"
+                onClick={() => setReversalOpen(false)}
+                className="text-sm text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            {reversalError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {reversalError}
+              </div>
+            )}
+            {reversalSuccess && (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                {reversalSuccess}
+              </div>
+            )}
+
+            <div className="text-xs bg-gray-50 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Transaction ID</span>
+                <span className="font-mono">{reversalTx.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Reference</span>
+                <span className="font-mono">{reversalTx.reference || "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount</span>
+                <span className="font-semibold">
+                  {reversalTx.currency} {reversalTx.amount.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status</span>
+                <span className="font-medium">{reversalTx.status}</span>
+              </div>
+            </div>
+
+            <form onSubmit={submitReversal} className="space-y-3">
+              <div className="flex flex-col">
+                <label className="text-xs text-gray-500 mb-1">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="border rounded-md px-2 py-1 text-sm"
+                  placeholder="Short reason (e.g. Customer charged twice)"
+                  value={reversalReason}
+                  onChange={(e) => setReversalReason(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs text-gray-500 mb-1">Details (optional)</label>
+                <textarea
+                  className="border rounded-md px-2 py-2 text-sm min-h-[80px]"
+                  placeholder="Provide more context for this reversal (customer complaint, logs, etc.)"
+                  value={reversalDetails}
+                  onChange={(e) => setReversalDetails(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReversalOpen(false)}
+                  className="px-3 py-1.5 rounded-md border text-sm"
+                  disabled={reversalSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reversalSubmitting || !reversalReason.trim()}
+                  className="inline-flex items-center px-4 py-1.5 rounded-md bg-[#08163d] text-white text-sm hover:bg-[#0b1d52] disabled:opacity-60"
+                >
+                  {reversalSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Submit Reversal
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
