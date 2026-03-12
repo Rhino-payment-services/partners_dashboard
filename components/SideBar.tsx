@@ -18,7 +18,8 @@ import {
   KeyRound,
   BookOpen,
   Users,
-  CreditCard
+  CreditCard,
+  RotateCcw
 } from 'lucide-react'
 import Link from 'next/link'
 import { getPartnerProfile } from '@/lib/api'
@@ -85,6 +86,16 @@ function SideBar() {
                   <Link href="/dashboard/transactions" className="flex items-center gap-2 md:gap-3 w-full">
                     <Activity className="mr-1 md:mr-2" size={18} />
                     <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Transactions</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {permissions?.canViewTransactions && (
+              <SidebarMenuItem className="mb-3 last:mb-0">
+                <SidebarMenuButton asChild className="flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors hover:bg-blue-600">
+                  <Link href="/dashboard/reversals" className="flex items-center gap-2 md:gap-3 w-full">
+                    <RotateCcw className="mr-1 md:mr-2" size={18} />
+                    <span className="font-regular text-[#08163d] text-sm md:text-base lg:text-[18px]">Reversals</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
