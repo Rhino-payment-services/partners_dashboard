@@ -128,7 +128,6 @@ export default function Signup() {
         contactPhone: formData.contactPhone,
         country: formData.country.toUpperCase(),
         tier: formData.tier,
-        walletTypes: ['ESCROW'], // Always ESCROW only
       }
 
       // Add optional fields if they have values
