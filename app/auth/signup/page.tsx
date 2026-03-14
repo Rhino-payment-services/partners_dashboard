@@ -137,7 +137,7 @@ export default function Signup() {
       if (formData.address) requestData.address = formData.address
       if (formData.description) requestData.description = formData.description
 
-      const response = await fetch(`${getApiBaseUrlWithV1()}/gateway/partners/signup`, {
+      const response = await fetch(`${getApiBaseUrlWithV1()}/api/v1/gateway/partners/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
