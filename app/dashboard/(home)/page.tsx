@@ -219,7 +219,9 @@ function Home() {
           
           {/* Wallet Balances */}
           <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-            {partnerProfile?.wallets?.map((wallet) => (
+            {partnerProfile?.wallets
+              ?.filter((wallet) => String(wallet.walletType || '').toUpperCase() !== 'COMMISSION')
+              .map((wallet) => (
               <div key={wallet.id} className='bg-gray-50 rounded-lg p-4'>
                 <div className='text-gray-500 text-sm mb-1'>
                   {wallet.walletType} Wallet ({wallet.currency})
