@@ -52,6 +52,7 @@ export default function TransactionsPage() {
   const [maxAmount, setMaxAmount] = useState<string>("")
   const [fromDate, setFromDate] = useState<string>("")
   const [toDate, setToDate] = useState<string>("")
+  const [exporting, setExporting] = useState(false)
 
   // Reversal popup state
   const [reversalOpen, setReversalOpen] = useState(false)
@@ -107,10 +108,64 @@ export default function TransactionsPage() {
     setPage(1)
   }
 
-  const handleExportCsv = () => {
-    if (!data || !data.items.length) return
+  const fetchAllFilteredTransactions = useCallback(async (): Promise<PartnerTransaction[]> => {
+    const exportPageSize = 200
+    const firstPage = await getPartnerTransactions({
+      page: 1,
+      pageSize: exportPageSize,
+      status: statusFilter || undefined,
+      type: typeFilter || undefined,
+      direction: directionFilter || undefined,
+      channel: channelFilter || undefined,
+      search: search || undefined,
+      minAmount: minAmount ? Number(minAmount) : undefined,
+      maxAmount: maxAmount ? Number(maxAmount) : undefined,
+      fromDate: fromDate || undefined,
+      toDate: toDate || undefined,
+    })
+
+    const allRows: PartnerTransaction[] = Array.isArray(firstPage?.items) ? [...firstPage.items] : []
+    const total = Number(firstPage?.total || allRows.length)
+    const pages = Math.max(1, Math.ceil(total / exportPageSize))
+
+    for (let p = 2; p <= pages; p += 1) {
+      const nextPage = await getPartnerTransactions({
+        page: p,
+        pageSize: exportPageSize,
+        status: statusFilter || undefined,
+        type: typeFilter || undefined,
+        direction: directionFilter || undefined,
+        channel: channelFilter || undefined,
+        search: search || undefined,
+        minAmount: minAmount ? Number(minAmount) : undefined,
+        maxAmount: maxAmount ? Number(maxAmount) : undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+      })
+      if (Array.isArray(nextPage?.items)) {
+        allRows.push(...nextPage.items)
+      }
+    }
+
+    return allRows
+  }, [statusFilter, typeFilter, directionFilter, channelFilter, search, minAmount, maxAmount, fromDate, toDate])
+
+  const handleExportCsv = async () => {
+    if (!data || !data.total) return
+    setExporting(true)
+    setError(null)
+    let rows: PartnerTransaction[] = []
+    try {
+      rows = await fetchAllFilteredTransactions()
+    } catch (err: any) {
+      setError(err?.message || "Failed to export transactions")
+      return
+    } finally {
+      setExporting(false)
+    }
+    if (!rows.length) return
     const headers = ["Date", "Reference", "Partner Reference", "Type", "Direction", "Status", "Channel", "Amount", "Currency", "Fee", "NetAmount"]
-    const rows = data.items.map((tx) => {
+    const csvRows = rows.map((tx) => {
       const created = new Date(tx.createdAt)
       const dateStr = created.toISOString()
       return [
@@ -127,7 +182,7 @@ export default function TransactionsPage() {
         tx.netAmount,
       ]
     })
-    const csvContent = [headers, ...rows]
+    const csvContent = [headers, ...csvRows]
       .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
       .join("\n")
 
@@ -135,20 +190,36 @@ export default function TransactionsPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.setAttribute("download", "transactions.csv")
+    const from = fromDate || "all"
+    const to = toDate || "all"
+    link.setAttribute("download", `transactions-${from}-to-${to}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
-  const handleExportJson = () => {
-    if (!data || !data.items.length) return
-    const blob = new Blob([JSON.stringify(data.items, null, 2)], { type: "application/json" })
+  const handleExportJson = async () => {
+    if (!data || !data.total) return
+    setExporting(true)
+    setError(null)
+    let rows: PartnerTransaction[] = []
+    try {
+      rows = await fetchAllFilteredTransactions()
+    } catch (err: any) {
+      setError(err?.message || "Failed to export transactions")
+      return
+    } finally {
+      setExporting(false)
+    }
+    if (!rows.length) return
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.setAttribute("download", "transactions.json")
+    const from = fromDate || "all"
+    const to = toDate || "all"
+    link.setAttribute("download", `transactions-${from}-to-${to}.json`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -331,13 +402,15 @@ export default function TransactionsPage() {
               </button>
               <button
                 onClick={handleExportCsv}
-                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50"
+                disabled={exporting || !data?.total}
+                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Export CSV
+                {exporting ? "Exporting..." : "Export CSV"}
               </button>
               <button
                 onClick={handleExportJson}
-                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50"
+                disabled={exporting || !data?.total}
+                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Export JSON
               </button>
