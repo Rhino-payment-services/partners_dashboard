@@ -202,7 +202,7 @@ fetch('https://dev-api.rukapay.net/api/v1/gateway/process-transfer-sandbox', {
             <div className='font-semibold text-[#08163d] mb-2'>Request Body</div>
             <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto'>
 {`{
-  "transactionMode": "PARTNER_SEND_MNO",  // or "PARTNER_SEND_BANK"
+  "transactionMode": "PARTNER_SEND_MNO",  // or "PARTNER_SEND_BANK", "PARTNER_PAY_BILL_PAYMENT", "PARTNER_PAY_AIRTIME"
   "amount": 50000,
   "currency": "UGX",
   "walletType": "ESCROW",  // Optional: "ESCROW" or "COMMISSION"
@@ -219,6 +219,14 @@ fetch('https://dev-api.rukapay.net/api/v1/gateway/process-transfer-sandbox', {
   "accountNumber": "1234567890",
   "bankCode": "STANBIC",
   "accountName": "John Doe",
+
+  // For Bill Payment (PARTNER_PAY_BILL_PAYMENT):
+  "billerCode": "NWSC",  // alias accepted: biller_code
+  "accountNumber": "123456789",  // alias accepted: account_number
+
+  // For Airtime (PARTNER_PAY_AIRTIME):
+  "phoneNumber": "256700000000",  // alias accepted: customer_phone
+  "mnoProvider": "MTN",  // alias accepted: network
   
   // Optional metadata
   "metadata": {
@@ -459,6 +467,18 @@ Headers: {
                     Send money to bank accounts. Requires <code className='bg-gray-100 px-1 rounded'>accountNumber</code>, <code className='bg-gray-100 px-1 rounded'>bankCode</code>, and <code className='bg-gray-100 px-1 rounded'>accountName</code>.
                   </div>
                 </div>
+                <div>
+                  <div className='font-semibold mb-1'>PARTNER_PAY_BILL_PAYMENT</div>
+                  <div className='text-xs text-gray-600'>
+                    Pay a utility/biller account. Requires <code className='bg-gray-100 px-1 rounded'>billerCode</code> and <code className='bg-gray-100 px-1 rounded'>accountNumber</code>.
+                  </div>
+                </div>
+                <div>
+                  <div className='font-semibold mb-1'>PARTNER_PAY_AIRTIME</div>
+                  <div className='text-xs text-gray-600'>
+                    Purchase airtime for a customer. Requires <code className='bg-gray-100 px-1 rounded'>phoneNumber</code> and <code className='bg-gray-100 px-1 rounded'>mnoProvider</code>.
+                  </div>
+                </div>
               </div>
             </div>
           </>
@@ -607,6 +627,8 @@ Headers: {
                   <div><b>PARTNER_SEND_BANK:</b> Send to bank account (simulated) - requires <code className='bg-gray-100 px-1 rounded'>recipientName</code> or <code className='bg-gray-100 px-1 rounded'>accountName</code></div>
                   <div><b>PARTNER_COLLECT_MNO:</b> Collect from MTN/Airtel (simulated) - requires <code className='bg-gray-100 px-1 rounded'>callbackUrl</code></div>
                   <div><b>PARTNER_RECEIVE_MNO:</b> Receive from MTN/Airtel (simulated) - requires <code className='bg-gray-100 px-1 rounded'>callbackUrl</code></div>
+                  <div><b>PARTNER_PAY_BILL_PAYMENT:</b> Bill payment (simulated) - requires <code className='bg-gray-100 px-1 rounded'>billerCode</code> and <code className='bg-gray-100 px-1 rounded'>accountNumber</code></div>
+                  <div><b>PARTNER_PAY_AIRTIME:</b> Airtime purchase (simulated) - requires <code className='bg-gray-100 px-1 rounded'>phoneNumber</code> and <code className='bg-gray-100 px-1 rounded'>mnoProvider</code></div>
                 </div>
               </div>
 
@@ -654,6 +676,36 @@ Headers: {
   "narration": "Payment collection",
   "partnerReference": "PARTNER-REF-123456",
   "callbackUrl": "https://partner.com/webhook"  // Required for collect transactions
+}`}
+                </pre>
+              </div>
+
+              <div className='mb-4'>
+                <div className='font-semibold text-[#08163d] mb-2'>Request Body (Bill Payment)</div>
+                <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto'>
+{`{
+  "transactionMode": "PARTNER_PAY_BILL_PAYMENT",
+  "amount": 50000,
+  "currency": "UGX",
+  "accountNumber": "123456789",  // alias accepted: account_number
+  "billerCode": "NWSC",  // alias accepted: biller_code
+  "narration": "Utility bill payment",
+  "partnerReference": "PARTNER-REF-123458"
+}`}
+                </pre>
+              </div>
+
+              <div className='mb-4'>
+                <div className='font-semibold text-[#08163d] mb-2'>Request Body (Airtime Purchase)</div>
+                <pre className='bg-gray-100 rounded p-4 text-xs font-mono overflow-x-auto'>
+{`{
+  "transactionMode": "PARTNER_PAY_AIRTIME",
+  "amount": 10000,
+  "currency": "UGX",
+  "phoneNumber": "256700123456",  // alias accepted: customer_phone
+  "mnoProvider": "MTN",  // alias accepted: network
+  "narration": "Airtime purchase",
+  "partnerReference": "PARTNER-REF-123459"
 }`}
                 </pre>
               </div>

@@ -8,6 +8,18 @@ export default function RukaPayDoc() {
       <p className='text-gray-700 text-sm mb-4'>
         Use this endpoint to collect payments from a customer's RukaPay account.
       </p>
+      <div className='bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-900'>
+        <div className='font-semibold mb-1'>Gateway Transaction Modes</div>
+        <div>
+          For partner gateway integrations, use <code className='bg-blue-100 px-1 rounded'>POST /api/v1/gateway/process-transfer</code>
+          and pass the right <code className='bg-blue-100 px-1 rounded'>transactionMode</code>, including
+          <code className='bg-blue-100 px-1 rounded ml-1'>PARTNER_PAY_BILL_PAYMENT</code> and
+          <code className='bg-blue-100 px-1 rounded ml-1'>PARTNER_PAY_AIRTIME</code>.
+        </div>
+        <div className='mt-1'>
+          See the main Gateway docs page in this dashboard for full, up-to-date payload examples.
+        </div>
+      </div>
       <div className='mb-2'>
         <span className='font-semibold text-[#08163d]'>Endpoint:</span>
         <span className='ml-2 font-mono text-xs bg-gray-100 px-2 py-1 rounded'>POST /v1/collections/rukapay</span>
