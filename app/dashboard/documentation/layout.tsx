@@ -17,7 +17,7 @@ export default function DocumentationLayout({ children }: { children: React.Reac
           <Link href="/dashboard/documentation" className={`px-3 py-2 rounded ${isActive('/dashboard/documentation') ? 'bg-[#08163d] text-white' : 'text-[#08163d] hover:bg-gray-100'}`}>
             Overview
           </Link>
-          <Link href="/dashboard/documentation/rukapay" className={`px-3 py-2 rounded ${isActive('/dashboard/documentation/rukapay') ? 'bg-[#08163d] text-white' : 'text-[#08163d] hover:bg-gray-100'}`}>
+          {/* <Link href="/dashboard/documentation/rukapay" className={`px-3 py-2 rounded ${isActive('/dashboard/documentation/rukapay') ? 'bg-[#08163d] text-white' : 'text-[#08163d] hover:bg-gray-100'}`}>
             RukaPay
           </Link>
           <Link href="/dashboard/documentation/mobile-money" className={`px-3 py-2 rounded ${isActive('/dashboard/documentation/mobile-money') ? 'bg-[#08163d] text-white' : 'text-[#08163d] hover:bg-gray-100'}`}>
@@ -31,7 +31,7 @@ export default function DocumentationLayout({ children }: { children: React.Reac
           </Link>
           <Link href="/dashboard/documentation/webhook" className={`px-3 py-2 rounded ${isActive('/dashboard/documentation/webhook') ? 'bg-[#08163d] text-white' : 'text-[#08163d] hover:bg-gray-100'}`}>
             Webhooks
-          </Link>
+          </Link> */}
         </nav>
         {children}
       </main>
