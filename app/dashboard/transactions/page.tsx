@@ -529,7 +529,21 @@ export default function TransactionsPage() {
       setExporting(false)
     }
     if (!rows.length) return
-    const headers = ["Date", "Reference", "Partner Reference", "Type", "Direction", "Status", "Channel", "Amount", "Currency", "Fee", "NetAmount"]
+    const headers = [
+      "Date",
+      "Reference",
+      "Partner Reference",
+      "Type",
+      "Direction",
+      "Status",
+      "Channel",
+      "Amount",
+      "Currency",
+      "Fee",
+      "NetAmount",
+      "Telephone Number",
+      "MNO",
+    ]
     const csvRows = rows.map((tx) => {
       const created = new Date(tx.createdAt)
       const dateStr = created.toISOString()
@@ -545,6 +559,8 @@ export default function TransactionsPage() {
         tx.currency,
         tx.fee,
         tx.netAmount,
+        tx.recipientAccount || "",
+        tx.providerName || "",
       ]
     })
     const csvContent = [headers, ...csvRows]
