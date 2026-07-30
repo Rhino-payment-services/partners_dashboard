@@ -230,15 +230,20 @@ export default function MerchantsPage() {
                         {merchant.contactEmail || merchant.contactPhone || '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={merchant.status === 'BLOCKED'}
-                          onClick={() => openEdit(merchant)}
-                        >
-                          <Pencil size={14} className="mr-1" />
-                          Edit
-                        </Button>
+                        {!merchant.isBaseMerchant && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={merchant.status === 'BLOCKED'}
+                            onClick={() => openEdit(merchant)}
+                          >
+                            <Pencil size={14} className="mr-1" />
+                            Edit
+                          </Button>
+                        )}
+                        {merchant.isBaseMerchant && (
+                          <span className="text-xs text-gray-400">Primary (read-only)</span>
+                        )}
                       </td>
                     </tr>
                   ))}
