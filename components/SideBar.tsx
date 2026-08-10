@@ -19,7 +19,8 @@ import {
   BookOpen,
   Users,
   CreditCard,
-  RotateCcw
+  RotateCcw,
+  Store
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -137,6 +138,14 @@ function SideBar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+            <SidebarMenuItem className="mb-3 last:mb-0">
+              <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/merchants') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
+                <Link href="/dashboard/merchants" className="flex items-center gap-2 md:gap-3 w-full">
+                  <Store className="mr-1 md:mr-2" size={18} />
+                  <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Merchants</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem className="mb-3 last:mb-0">
               <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/settings') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
                 <Link href="/dashboard/settings" className="flex items-center gap-2 md:gap-3 w-full">
