@@ -11,11 +11,11 @@ export default function RootLayout({
   return (
     <ProtectedRoute>
       <SidebarProvider>
-        <div className="flex min-h-screen w-full">
+        <div className="flex min-h-screen w-full min-w-0">
           <SideBar />
-          <SidebarInset className="flex flex-col w-full">
+          <SidebarInset className="flex min-w-0 w-full flex-col overflow-x-hidden bg-[#f8f9fb] text-sm">
             <DashboardHeader />
-            <main className="flex-1 overflow-auto">
+            <main className="min-w-0 flex-1 overflow-auto bg-[#f8f9fb]">
               {children}
             </main>
           </SidebarInset>

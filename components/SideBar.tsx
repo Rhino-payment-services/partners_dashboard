@@ -3,12 +3,13 @@ import React, { useEffect, useState } from 'react'
 import {
   Sidebar,
   SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarHeader,
   SidebarFooter,
-  SidebarSeparator
 } from './ui/sidebar'
 import {
   LayoutDashboard,
@@ -18,13 +19,63 @@ import {
   KeyRound,
   BookOpen,
   Users,
-  CreditCard,
   RotateCcw,
-  Store
+  Store,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getPartnerProfile } from '@/lib/api'
+
+type NavigationItem = {
+  label: string
+  href: string
+  icon: LucideIcon
+  permission?: string
+}
+
+const navigationItems: NavigationItem[] = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  {
+    label: 'Transactions',
+    href: '/dashboard/transactions',
+    icon: Activity,
+    permission: 'canViewTransactions',
+  },
+  {
+    label: 'Reversals',
+    href: '/dashboard/reversals',
+    icon: RotateCcw,
+    permission: 'canViewTransactions',
+  },
+  {
+    label: 'API Keys',
+    href: '/dashboard/api-keys',
+    icon: KeyRound,
+    permission: 'canManageApiKeys',
+  },
+  {
+    label: 'Members',
+    href: '/dashboard/members',
+    icon: Users,
+    permission: 'canManageMembers',
+  },
+  {
+    label: 'Merchants',
+    href: '/dashboard/merchants',
+    icon: Store,
+  },
+]
+
+const supportItems: NavigationItem[] = [
+  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+  {
+    label: 'Documentation',
+    href: '/dashboard/documentation',
+    icon: BookOpen,
+  },
+]
 
 function SideBar() {
   const [permissions, setPermissions] = useState<any>(null)
@@ -67,124 +118,99 @@ function SideBar() {
     if (!href) return false
     if (href === '/') return pathname === '/'
     
-    // Exact match or match with trailing slash
     if (pathname === href || pathname === href + '/') return true
-    
-    // For documentation section, also match subpages (rukapay, mobile-money, etc.)
-    if (href === '/dashboard/documentation' && pathname.startsWith(href + '/')) {
-      return true
-    }
-    
-    return false
+    return href !== '/dashboard' && pathname.startsWith(href + '/')
   }
 
+  const renderItems = (items: NavigationItem[]) =>
+    items
+      .filter((item) => !item.permission || permissions?.[item.permission])
+      .map(({ label, href, icon: Icon }) => {
+        const active = isActivePath(href)
+        return (
+          <SidebarMenuItem key={href}>
+            <SidebarMenuButton
+              asChild
+              isActive={active}
+              tooltip={label}
+              className={`h-9 rounded-lg px-3 text-[13px] font-medium transition-all ${
+                active
+                  ? 'bg-[#eef2ff] text-[#08163d] shadow-sm ring-1 ring-[#dfe5f4] hover:bg-[#e8edfb] hover:text-[#08163d]'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-[#08163d]'
+              }`}
+            >
+              <Link href={href} className="flex items-center gap-3">
+                <Icon size={16} strokeWidth={1.8} />
+                <span>{label}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )
+      })
+
   return (
-    <Sidebar collapsible="offcanvas" className="border-none">
-        <SidebarHeader className="flex py-4 px-4 md:px-8 h-16 bg-[#08163d] text-white border-b border-white gap-2">
-          <div className='flex items-center gap-2'>
-            <div className="w-9 h-9 rounded-lg bg-amber-400 flex items-center justify-center">
-              <CreditCard className="text-[#08163d]" size={20} />
-            </div>
-            <span className='text-white text-base md:text-lg font-bold'>RukaPay</span>
+    <Sidebar collapsible="icon" className="border-r border-slate-200/80 bg-[#fbfbfc]">
+      <SidebarHeader className="h-16 justify-center border-b border-slate-200/80 bg-[#fbfbfc] px-4">
+        <div className="flex items-center gap-2.5">
+          <div className="relative size-8 shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-200/80">
+            <Image
+              src="/images/logo.png"
+              alt="RukaPay"
+              fill
+              sizes="32px"
+              className="object-contain p-0.5"
+              priority
+            />
           </div>
-        </SidebarHeader>
-          <SidebarContent className="flex-1 px-2 md:px-4 text-[#08163d] bg-white py-5">
-          <SidebarMenu>
-            <SidebarMenuItem className="mb-3 last:mb-0">
-              <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                <Link href="/dashboard" className="flex items-center gap-2 md:gap-3 w-full">
-                  <LayoutDashboard className="mr-1 md:mr-2" size={18} />
-                  <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Dashboard</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {permissions?.canViewTransactions && (
-              <SidebarMenuItem className="mb-3 last:mb-0">
-                <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/transactions') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                  <Link href="/dashboard/transactions" className="flex items-center gap-2 md:gap-3 w-full">
-                    <Activity className="mr-1 md:mr-2" size={18} />
-                    <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Transactions</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-            {permissions?.canViewTransactions && (
-              <SidebarMenuItem className="mb-3 last:mb-0">
-                <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/reversals') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                  <Link href="/dashboard/reversals" className="flex items-center gap-2 md:gap-3 w-full">
-                    <RotateCcw className="mr-1 md:mr-2" size={18} />
-                    <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Reversals</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-            {permissions?.canManageApiKeys && (
-              <SidebarMenuItem className="mb-3 last:mb-0">
-                <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/api-keys') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                  <Link href="/dashboard/api-keys" className="flex items-center gap-2 md:gap-3 w-full">
-                    <KeyRound className="mr-1 md:mr-2" size={18} />
-                    <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">API Keys</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-            {permissions?.canManageMembers && (
-              <SidebarMenuItem className="mb-3 last:mb-0">
-                <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/members') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                  <Link href="/dashboard/members" className="flex items-center gap-2 md:gap-3 w-full">
-                    <Users className="mr-1 md:mr-2" size={18} />
-                    <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Members</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-            <SidebarMenuItem className="mb-3 last:mb-0">
-              <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/merchants') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                <Link href="/dashboard/merchants" className="flex items-center gap-2 md:gap-3 w-full">
-                  <Store className="mr-1 md:mr-2" size={18} />
-                  <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Merchants</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem className="mb-3 last:mb-0">
-              <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/settings') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                <Link href="/dashboard/settings" className="flex items-center gap-2 md:gap-3 w-full">
-                  <Settings className="mr-1 md:mr-2" size={18} />
-                  <span className='font-regular text-current text-sm md:text-base lg:text-[18px]'>Settings</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {/* Documentation */}
-            <SidebarMenuItem className="mb-3 last:mb-0">
-              <SidebarMenuButton asChild className={`flex items-center gap-2 md:gap-3 py-3 md:py-4 h-auto px-2 md:px-4 rounded-lg transition-colors ${isActivePath('/dashboard/documentation') ? 'bg-[#08163d] text-white hover:bg-[#08163d] hover:text-white' : 'text-[#08163d] hover:bg-[#08163d] hover:text-white cursor-pointer'}`}>
-                <Link href="/dashboard/documentation" className="flex items-center gap-2 md:gap-3 w-full">
-                  <BookOpen className="mr-1 md:mr-2" size={18} />
-                  <span className="font-regular text-current text-sm md:text-base lg:text-[18px]">Documentation</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+          <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="text-sm font-bold tracking-tight text-[#08163d]">RukaPay</span>
+            <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+              Partner portal
+            </span>
+          </div>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="bg-[#fbfbfc] px-2 py-4">
+        <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="h-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 group-data-[collapsible=icon]:hidden">
+            General
+          </SidebarGroupLabel>
+          <SidebarMenu className="gap-1">
+            {renderItems(navigationItems)}
           </SidebarMenu>
-        </SidebarContent>
-        <SidebarSeparator />
-        <SidebarFooter className="px-2 md:px-4 pb-4">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton 
-                className="flex items-center gap-2 md:gap-3 py-3 px-2 md:px-4 rounded-lg transition-colors hover:bg-[#08163d] hover:text-white cursor-pointer"
-                onClick={() => {
-                  localStorage.removeItem('accessToken')
-                  localStorage.removeItem('refreshToken')
-                  localStorage.removeItem('user')
-                  window.location.href = '/auth/login'
-                }}
-              >
-                <LogOut className="mr-1 md:mr-2" size={18} />
-                  <span className="font-regular text-sm md:text-base lg:text-[18px]">Log Out</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-slate-200/80 bg-[#fbfbfc] p-2">
+        <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="h-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 group-data-[collapsible=icon]:hidden">
+            Support
+          </SidebarGroupLabel>
+          <SidebarMenu className="gap-1">
+            {renderItems(supportItems)}
           </SidebarMenu>
-        </SidebarFooter>
-      </Sidebar>
+        </SidebarGroup>
+        <div className="my-2 h-px bg-slate-200/80" />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Log out"
+              className="h-9 rounded-lg px-3 text-[13px] font-medium text-slate-600 hover:bg-red-50 hover:text-red-600"
+              onClick={() => {
+                localStorage.removeItem('accessToken')
+                localStorage.removeItem('refreshToken')
+                localStorage.removeItem('user')
+                window.location.href = '/auth/login'
+              }}
+            >
+              <LogOut size={16} strokeWidth={1.8} />
+              <span>Log out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   )
 }
 
