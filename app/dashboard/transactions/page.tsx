@@ -2,7 +2,17 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import { getPartnerTransactions, submitPartnerReversalRequest } from "@/lib/api"
-import { ArrowUpDown, Loader2, AlertCircle, RotateCcw, Eye, User, Clock, Hash, Copy, X, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  ArrowUpDown,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
+  Search,
+  Download,
+  FileJson,
+  Eye,
+  X,
+} from "lucide-react"
 import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
 
 interface PartnerTransaction {
@@ -25,371 +35,10 @@ interface PartnerTransaction {
   providerName?: string | null
   providerType?: string | null
   partnerReference?: string | null
-  metadata?: Record<string, unknown> | null
+  escrowWalletBalance?: number | null
+  commissionWalletBalance?: number | null
   createdAt: string
   processedAt: string | null
-}
-
-function formatTransactionType(type: string): string {
-  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function formatMetadataValue(value: unknown): string {
-  if (value === null || value === undefined) return "—"
-  if (typeof value === "object") return JSON.stringify(value)
-  return String(value)
-}
-
-function getStatusBadgeClass(status: string): string {
-  const isSuccess = status === "SUCCESS"
-  const isPending = status === "PENDING" || status === "PROCESSING"
-  return (
-    "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium " +
-    (isSuccess
-      ? "bg-green-100 text-green-700"
-      : isPending
-      ? "bg-yellow-100 text-yellow-700"
-      : "bg-red-100 text-red-700")
-  )
-}
-
-function getStatusBadgeClassOnDark(status: string): string {
-  const isSuccess = status === "SUCCESS"
-  const isPending = status === "PENDING" || status === "PROCESSING"
-  return (
-    "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium " +
-    (isSuccess
-      ? "bg-green-500/20 text-green-200"
-      : isPending
-      ? "bg-yellow-500/20 text-yellow-200"
-      : "bg-red-500/20 text-red-200")
-  )
-}
-
-const PARTNER_METADATA_KEYS = [
-  "mnoProvider",
-  "phoneNumber",
-  "recipientPhone",
-  "transactionModeCode",
-  "partnerReference",
-] as const
-
-function getPartnerMetadataFields(metadata: Record<string, unknown> | null | undefined) {
-  if (!metadata) return []
-  return PARTNER_METADATA_KEYS.map((key) => ({
-    key,
-    label: key.replace(/([A-Z])/g, " $1").trim(),
-    value: metadata[key],
-  })).filter(({ value }) => value !== null && value !== undefined && value !== "")
-}
-
-function getMetadataBooleanTags(metadata: Record<string, unknown> | null | undefined) {
-  if (!metadata) return []
-  const tags: { label: string; className: string }[] = []
-  if (metadata.isSandbox === true || metadata.sandboxTransaction === true) {
-    tags.push({ label: "Sandbox", className: "bg-amber-100 text-amber-800" })
-  }
-  if (metadata.rukapayFeeCredited === true) {
-    tags.push({ label: "Fee credited", className: "bg-emerald-100 text-emerald-800" })
-  }
-  if (metadata.platformRevenueCredited === true) {
-    tags.push({ label: "Revenue credited", className: "bg-blue-100 text-blue-800" })
-  }
-  return tags
-}
-
-function getTechnicalMetadata(tx: PartnerTransaction): Record<string, unknown> {
-  const result: Record<string, unknown> = {
-    id: tx.id,
-    reference: tx.reference,
-    externalReference: tx.externalReference,
-    externalId: tx.externalId,
-    partnerReference: tx.partnerReference,
-    type: tx.type,
-    status: tx.status,
-    amount: tx.amount,
-    currency: tx.currency,
-    fee: tx.fee,
-    netAmount: tx.netAmount,
-    direction: tx.direction,
-    mode: tx.mode,
-    channel: tx.channel,
-    description: tx.description,
-    recipientAccount: tx.recipientAccount,
-    recipientName: tx.recipientName,
-    providerName: tx.providerName,
-    providerType: tx.providerType,
-    createdAt: tx.createdAt,
-    processedAt: tx.processedAt,
-  }
-  if (tx.metadata) {
-    for (const [key, value] of Object.entries(tx.metadata)) {
-      if (value !== null && value !== undefined && !(typeof value === "object" && Object.keys(value as object).length === 0)) {
-        result[`metadata.${key}`] = value
-      }
-    }
-  }
-  return Object.fromEntries(
-    Object.entries(result).filter(([, v]) => v !== null && v !== undefined && v !== "")
-  )
-}
-
-function copyToClipboard(text: string) {
-  if (typeof navigator !== "undefined" && navigator.clipboard) {
-    navigator.clipboard.writeText(text).catch(() => {})
-  }
-}
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso)
-  return {
-    date: d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" }),
-    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
-  }
-}
-
-interface DetailCardProps {
-  icon: React.ReactNode
-  title: string
-  children: React.ReactNode
-  className?: string
-}
-
-function DetailCard({ icon, title, children, className = "" }: DetailCardProps) {
-  return (
-    <div className={`bg-gray-50 rounded-xl p-4 ${className}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-[#08163d]">{icon}</span>
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{title}</h3>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-interface TransactionDetailModalProps {
-  tx: PartnerTransaction
-  onClose: () => void
-}
-
-function TransactionDetailModal({ tx, onClose }: TransactionDetailModalProps) {
-  const [showTechnical, setShowTechnical] = useState(false)
-  const primaryRef = tx.reference || tx.externalReference || tx.id
-  const created = formatDateTime(tx.createdAt)
-  const processed = tx.processedAt ? formatDateTime(tx.processedAt) : null
-  const partnerMetaFields = getPartnerMetadataFields(tx.metadata)
-  const booleanTags = getMetadataBooleanTags(tx.metadata)
-  const isCredit = tx.direction === "CREDIT"
-  const isSandbox = tx.metadata?.isSandbox === true || tx.metadata?.sandboxTransaction === true
-
-  const CopyableRef = ({ label, value }: { label: string; value: string }) => (
-    <button
-      type="button"
-      onClick={() => copyToClipboard(value)}
-      className="w-full text-left group"
-      title="Click to copy"
-    >
-      <span className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</span>
-      <div className="flex items-start gap-1.5 mt-0.5">
-        <span className="font-mono text-xs text-[#08163d] break-all flex-1">{value}</span>
-        <Copy className="w-3 h-3 text-gray-300 group-hover:text-[#08163d] shrink-0 mt-0.5" />
-      </div>
-    </button>
-  )
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Branded header */}
-        <div className="bg-[#08163d] text-white px-6 py-5 shrink-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <h2 className="text-lg font-semibold">{formatTransactionType(tx.type)}</h2>
-                <span className={getStatusBadgeClassOnDark(tx.status)}>{tx.status}</span>
-              </div>
-              <p className="font-mono text-sm text-white/80 truncate" title={primaryRef}>
-                {primaryRef}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-white/70 hover:text-white shrink-0 p-1"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5 cursor-pointer" />
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="overflow-y-auto max-h-[75vh] px-6 py-6 space-y-5">
-          {/* Hero amount */}
-          <div>
-            <p className="text-3xl font-bold text-[#08163d]">
-              {tx.currency} {tx.netAmount.toLocaleString()}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {isCredit ? "Received" : tx.direction === "DEBIT" ? "Sent" : "Net amount"}
-              {tx.fee > 0 && (
-                <span className="text-gray-400">
-                  {" · "}Fee {tx.currency} {tx.fee.toLocaleString()} · Gross {tx.currency} {tx.amount.toLocaleString()}
-                </span>
-              )}
-            </p>
-          </div>
-
-          {/* Quick-info chips */}
-          <div className="flex flex-wrap gap-2">
-            {tx.direction && (
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  isCredit ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                {tx.direction}
-              </span>
-            )}
-            {tx.channel && (
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">{tx.channel}</span>
-            )}
-            {tx.providerName && (
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
-                {tx.providerName}
-                {tx.providerType ? ` · ${tx.providerType}` : ""}
-              </span>
-            )}
-            {isSandbox && (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">Sandbox</span>
-            )}
-          </div>
-
-          {/* Card grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <DetailCard icon={<User className="w-4 h-4" />} title="Recipient">
-              <p className="font-semibold text-[#08163d]">{tx.recipientName || "Unknown recipient"}</p>
-              <p className="text-sm text-gray-600 mt-1 break-all">{tx.recipientAccount || "—"}</p>
-            </DetailCard>
-
-            <DetailCard icon={<Hash className="w-4 h-4" />} title="References">
-              <div className="space-y-3">
-                {tx.partnerReference && (
-                  <div>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-wide">Partner Reference</span>
-                    <p className="font-mono text-sm font-semibold text-[#08163d] break-all mt-0.5">{tx.partnerReference}</p>
-                  </div>
-                )}
-                {tx.reference && <CopyableRef label="RukaPay Reference" value={tx.reference} />}
-                {(tx.externalReference || tx.externalId) && (
-                  <CopyableRef
-                    label="External Reference"
-                    value={tx.externalReference || tx.externalId || ""}
-                  />
-                )}
-                {!tx.partnerReference && !tx.reference && !tx.externalReference && (
-                  <CopyableRef label="Transaction ID" value={tx.id} />
-                )}
-              </div>
-            </DetailCard>
-
-            <DetailCard icon={<Clock className="w-4 h-4" />} title="Timeline">
-              <div className="space-y-3">
-                <div>
-                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">Created</span>
-                  <p className="text-sm font-medium text-[#08163d] mt-0.5">{created.date}</p>
-                  <p className="text-xs text-gray-500">{created.time}</p>
-                </div>
-                {processed ? (
-                  <div>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-wide">Processed</span>
-                    <p className="text-sm font-medium text-[#08163d] mt-0.5">{processed.date}</p>
-                    <p className="text-xs text-gray-500">{processed.time}</p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400">Not yet processed</p>
-                )}
-              </div>
-            </DetailCard>
-
-            <DetailCard icon={<ArrowUpDown className="w-4 h-4" />} title="Details">
-              <div className="space-y-2 text-sm">
-                {tx.description && (
-                  <p className="text-gray-700 whitespace-pre-wrap break-words">{tx.description}</p>
-                )}
-                {tx.mode && (
-                  <div>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-wide">Mode</span>
-                    <p className="text-[#08163d] mt-0.5">{tx.mode}</p>
-                  </div>
-                )}
-                {typeof tx.metadata?.transactionModeCode === "string" && (
-                  <div>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-wide">Transaction Mode</span>
-                    <p className="font-mono text-xs text-[#08163d] mt-0.5">{tx.metadata.transactionModeCode}</p>
-                  </div>
-                )}
-                {!tx.description && !tx.mode && !tx.metadata?.transactionModeCode && (
-                  <p className="text-gray-400 text-xs">No additional details</p>
-                )}
-              </div>
-            </DetailCard>
-          </div>
-
-          {/* Metadata panel */}
-          {(partnerMetaFields.length > 0 || booleanTags.length > 0 || tx.metadata) && (
-            <DetailCard icon={<Hash className="w-4 h-4" />} title="Additional Info" className="sm:col-span-2">
-              {booleanTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {booleanTags.map((tag) => (
-                    <span key={tag.label} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${tag.className}`}>
-                      {tag.label}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {partnerMetaFields.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                  {partnerMetaFields
-                    .filter(({ key }) => key !== "partnerReference" || !tx.partnerReference)
-                    .map(({ key, label, value }) => (
-                      <div key={key}>
-                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</span>
-                        <p className="text-sm text-[#08163d] mt-0.5 break-all">{formatMetadataValue(value)}</p>
-                      </div>
-                    ))}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowTechnical((v) => !v)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#08163d] transition"
-              >
-                {showTechnical ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                {showTechnical ? "Hide technical details" : "Show technical details"}
-              </button>
-              {showTechnical && (
-                <pre className="mt-3 p-3 bg-gray-900 text-gray-100 rounded-lg text-[11px] font-mono overflow-x-auto max-h-48 overflow-y-auto">
-                  {JSON.stringify(getTechnicalMetadata(tx), null, 2)}
-                </pre>
-              )}
-            </DetailCard>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full cursor-pointer sm:w-auto px-6 py-2 text-sm rounded-md bg-[#08163d] text-white hover:bg-[#0b1d52] transition"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 interface TransactionResponse {
@@ -397,6 +46,7 @@ interface TransactionResponse {
   total: number
   page: number
   pageSize: number
+  showWalletBalances?: boolean
 }
 
 export default function TransactionsPage() {
@@ -413,7 +63,11 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState<string>("")
   const [minAmount, setMinAmount] = useState<string>("")
   const [maxAmount, setMaxAmount] = useState<string>("")
-  const [fromDate, setFromDate] = useState<string>("")
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().slice(0, 10)
+  })
   const [toDate, setToDate] = useState<string>("")
   const [exporting, setExporting] = useState(false)
 
@@ -425,10 +79,10 @@ export default function TransactionsPage() {
   const [reversalSubmitting, setReversalSubmitting] = useState(false)
   const [reversalError, setReversalError] = useState<string | null>(null)
   const [reversalSuccess, setReversalSuccess] = useState<string | null>(null)
-
   const [selectedTx, setSelectedTx] = useState<PartnerTransaction | null>(null)
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
+  const showWalletBalances = Boolean(data?.showWalletBalances)
 
   const fetchTransactions = useCallback(async () => {
     try {
@@ -474,28 +128,15 @@ export default function TransactionsPage() {
   }
 
   const fetchAllFilteredTransactions = useCallback(async (): Promise<PartnerTransaction[]> => {
-    const exportPageSize = 200
-    const firstPage = await getPartnerTransactions({
-      page: 1,
-      pageSize: exportPageSize,
-      status: statusFilter || undefined,
-      type: typeFilter || undefined,
-      direction: directionFilter || undefined,
-      channel: channelFilter || undefined,
-      search: search || undefined,
-      minAmount: minAmount ? Number(minAmount) : undefined,
-      maxAmount: maxAmount ? Number(maxAmount) : undefined,
-      fromDate: fromDate || undefined,
-      toDate: toDate || undefined,
-    })
+    // Must match backend max pageSize in partner-auth.service (currently 100).
+    const exportPageSize = 100
+    const allRows: PartnerTransaction[] = []
+    let pageNum = 1
+    let total = 0
 
-    const allRows: PartnerTransaction[] = Array.isArray(firstPage?.items) ? [...firstPage.items] : []
-    const total = Number(firstPage?.total || allRows.length)
-    const pages = Math.max(1, Math.ceil(total / exportPageSize))
-
-    for (let p = 2; p <= pages; p += 1) {
-      const nextPage = await getPartnerTransactions({
-        page: p,
+    while (true) {
+      const result = await getPartnerTransactions({
+        page: pageNum,
         pageSize: exportPageSize,
         status: statusFilter || undefined,
         type: typeFilter || undefined,
@@ -507,9 +148,15 @@ export default function TransactionsPage() {
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
       })
-      if (Array.isArray(nextPage?.items)) {
-        allRows.push(...nextPage.items)
+
+      const items = Array.isArray(result?.items) ? result.items : []
+      total = Number(result?.total ?? total)
+      allRows.push(...items)
+
+      if (items.length === 0 || allRows.length >= total) {
+        break
       }
+      pageNum += 1
     }
 
     return allRows
@@ -529,6 +176,11 @@ export default function TransactionsPage() {
       setExporting(false)
     }
     if (!rows.length) return
+    if (data && rows.length < data.total) {
+      setError(
+        `Export may be incomplete: downloaded ${rows.length} of ${data.total} matching transactions.`,
+      )
+    }
     const headers = [
       "Date",
       "Reference",
@@ -543,6 +195,9 @@ export default function TransactionsPage() {
       "NetAmount",
       "Telephone Number",
       "MNO",
+      ...(showWalletBalances
+        ? ["Escrow Wallet Balance", "Commission Wallet Balance"]
+        : []),
     ]
     const csvRows = rows.map((tx) => {
       const created = new Date(tx.createdAt)
@@ -561,6 +216,12 @@ export default function TransactionsPage() {
         tx.netAmount,
         tx.recipientAccount || "",
         tx.providerName || "",
+        ...(showWalletBalances
+          ? [
+              tx.escrowWalletBalance ?? "",
+              tx.commissionWalletBalance ?? "",
+            ]
+          : []),
       ]
     })
     const csvContent = [headers, ...csvRows]
@@ -594,6 +255,11 @@ export default function TransactionsPage() {
       setExporting(false)
     }
     if (!rows.length) return
+    if (data && rows.length < data.total) {
+      setError(
+        `Export may be incomplete: downloaded ${rows.length} of ${data.total} matching transactions.`,
+      )
+    }
     const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -605,14 +271,6 @@ export default function TransactionsPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-  }
-
-  const openDetailModal = (tx: PartnerTransaction) => {
-    setSelectedTx(tx)
-  }
-
-  const closeDetailModal = () => {
-    setSelectedTx(null)
   }
 
   const openReversalPopup = (tx: PartnerTransaction) => {
@@ -681,39 +339,42 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <main className="flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-7xl">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="flex min-h-full min-w-0 flex-col bg-[#f8f9fb]">
+      <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 md:p-6">
+        <div className="mb-5 flex items-end justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-[#08163d]">Transactions</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-xl font-semibold tracking-tight text-[#08163d]">Transactions</h1>
+            <p className="mt-1 text-xs text-slate-500">
               All transactions processed via your RukaPay partner account.
             </p>
           </div>
           {data && (
-            <div className="text-right text-sm text-gray-500">
-              <div>Total: <span className="font-semibold text-[#08163d]">{data.total}</span></div>
+            <div className="text-right text-[11px] text-slate-500">
+              <div><span className="font-semibold text-[#08163d]">{data.total.toLocaleString()}</span> transactions</div>
               <div>Page {page} of {totalPages}</div>
             </div>
           )}
         </div>
 
         {/* Filters & actions */}
-        <div className="bg-white rounded-2xl shadow-md p-4 mb-4">
-          <div className="flex flex-wrap gap-3 items-end">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex flex-wrap items-end gap-2.5">
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Search (ref / description)</label>
-              <input
-                className="border rounded-md px-2 py-1 text-sm w-48"
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              />
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Search</label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  className="h-8 w-52 rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-xs outline-none transition focus:border-[#08163d]/40 focus:ring-2 focus:ring-[#08163d]/5"
+                  placeholder="Reference or description"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                />
+              </div>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Status</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Status</label>
               <select
-                className="border rounded-md px-2 py-1 text-sm w-32"
+                className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
               >
@@ -726,9 +387,9 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Direction</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Direction</label>
               <select
-                className="border rounded-md px-2 py-1 text-sm w-32"
+                className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={directionFilter}
                 onChange={(e) => { setDirectionFilter(e.target.value); setPage(1) }}
               >
@@ -738,104 +399,114 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Channel</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Channel</label>
               <input
-                className="border rounded-md px-2 py-1 text-sm w-32"
+                className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 placeholder="WEB / API..."
                 value={channelFilter}
                 onChange={(e) => { setChannelFilter(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">From date</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">From</label>
               <input
                 type="date"
-                className="border rounded-md px-2 py-1 text-sm"
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={fromDate}
                 onChange={(e) => { setFromDate(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">To date</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">To</label>
               <input
                 type="date"
-                className="border rounded-md px-2 py-1 text-sm"
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={toDate}
                 onChange={(e) => { setToDate(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Min amount</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Min amount</label>
               <input
                 type="number"
-                className="border rounded-md px-2 py-1 text-sm w-28"
+                className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={minAmount}
                 onChange={(e) => { setMinAmount(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Max amount</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Max amount</label>
               <input
                 type="number"
-                className="border rounded-md px-2 py-1 text-sm w-28"
+                className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={maxAmount}
                 onChange={(e) => { setMaxAmount(e.target.value); setPage(1) }}
               />
             </div>
-            <div className="flex gap-2 ml-auto">
+            <div className="ml-auto flex gap-1.5">
               <button
                 onClick={handleResetFilters}
-                className="px-3 py-1 text-xs border rounded-md text-gray-600 hover:bg-gray-50"
+                className="h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
               >
                 Reset
               </button>
               <button
                 onClick={handleExportCsv}
                 disabled={exporting || !data?.total}
-                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-[#08163d] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {exporting ? "Exporting..." : "Export CSV"}
+                <Download className="size-3.5" />
+                {exporting ? "Exporting..." : "CSV"}
               </button>
               <button
                 onClick={handleExportJson}
                 disabled={exporting || !data?.total}
-                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-[#08163d] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Export JSON
+                <FileJson className="size-3.5" />
+                JSON
               </button>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-md p-4">
+        <div className="overflow-hidden bg-white">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-gray-500">
-              <Loader2 className="animate-spin mr-2" /> Loading transactions...
+            <div className="flex items-center justify-center py-14 text-xs text-slate-500">
+              <Loader2 className="mr-2 size-4 animate-spin" /> Loading transactions...
             </div>
           ) : error ? (
-            <div className="py-10 text-center text-red-600 text-sm">{error}</div>
+            <div className="py-14 text-center text-xs text-red-600">{error}</div>
           ) : !data || data.items.length === 0 ? (
-            <div className="py-10 text-center text-gray-500 text-sm">No transactions found yet.</div>
+            <div className="py-14 text-center text-xs text-slate-500">No transactions found yet.</div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="text-gray-500 border-b text-xs uppercase">
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Reference</th>
-                      <th className="py-2 pr-4">Partner Ref</th>
-                      <th className="py-2 pr-4 flex items-center gap-1">
+              <div className="max-h-[calc(100vh-300px)] overflow-x-auto overflow-y-auto">
+                <table className="min-w-full whitespace-nowrap text-left">
+                  <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                    <tr className="border-b border-slate-200 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      <th className="px-3 py-2.5">Date</th>
+                      <th className="px-3 py-2.5">Reference</th>
+                      <th className="px-3 py-2.5">Partner Ref</th>
+                      <th className="px-3 py-2.5">
+                        <span className="flex items-center gap-1">
                         Amount
-                        <ArrowUpDown className="w-3 h-3 text-gray-400" />
+                          <ArrowUpDown className="size-3 text-slate-300" />
+                        </span>
                       </th>
-                      <th className="py-2 pr-4">Type</th>
-                      <th className="py-2 pr-4">Direction</th>
-                      <th className="py-2 pr-4">Recipient</th>
-                      <th className="py-2 pr-4">Provider</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Channel</th>
-                      <th className="py-2 pr-4 text-right">Actions</th>
+                      {showWalletBalances && (
+                        <>
+                          <th className="px-3 py-2.5 text-right">Escrow Balance</th>
+                          <th className="px-3 py-2.5 text-right">Commission Balance</th>
+                        </>
+                      )}
+                      <th className="px-3 py-2.5">Type</th>
+                      <th className="px-3 py-2.5">Direction</th>
+                      <th className="px-3 py-2.5">Recipient</th>
+                      <th className="px-3 py-2.5">Provider</th>
+                      <th className="px-3 py-2.5">Status</th>
+                      <th className="px-3 py-2.5">Channel</th>
+                      <th className="px-3 py-2.5 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -851,47 +522,66 @@ export default function TransactionsPage() {
                       minute: "2-digit",
                     })
 
+                    const isSuccess = tx.status === "SUCCESS"
+                    const isPending = tx.status === "PENDING" || tx.status === "PROCESSING"
+
                     return (
-                      <tr key={tx.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                        <td className="py-2 pr-4 align-top text-xs text-gray-500">
-                          <div>{dateStr}</div>
-                          <div>{timeStr}</div>
+                      <tr key={tx.id} className="group border-b border-slate-100 transition-colors last:border-b-0 hover:bg-[#fafbfe]">
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-500">
+                          <div className="font-medium text-slate-600">{dateStr}</div>
+                          <div className="mt-0.5 text-[9px] text-slate-400">{timeStr}</div>
                         </td>
-                        <td className="py-2 pr-4 align-top">
-                          <div className="font-mono text-xs text-[#08163d] truncate max-w-[180px]">
+                        <td className="px-3 py-3 align-top">
+                          <div className="max-w-[180px] truncate font-mono text-[10px] font-medium text-[#08163d]">
                             {tx.reference || tx.externalReference || "—"}
                           </div>
                           {tx.description && (
-                            <div className="text-[11px] text-gray-500 truncate max-w-[220px]">
+                            <div className="mt-0.5 max-w-[200px] truncate text-[9px] text-slate-400">
                               {tx.description}
                             </div>
                           )}
                         </td>
-                        <td className="py-2 pr-4 align-top">
-                          <div className="font-mono text-xs text-gray-700 truncate max-w-[150px]">
+                        <td className="px-3 py-3 align-top">
+                          <div className="max-w-[140px] truncate font-mono text-[10px] text-slate-500">
                             {tx.partnerReference || "—"}
                           </div>
                         </td>
-                        <td className="py-2 pr-4 align-top text-sm font-semibold text-[#08163d]">
+                        <td className="px-3 py-3 align-top text-[11px] font-semibold text-[#08163d]">
                           {tx.currency} {tx.amount.toLocaleString()}
                           {tx.fee > 0 && (
-                            <div className="text-[11px] text-gray-400">Fee: {tx.currency} {tx.fee.toLocaleString()}</div>
+                            <div className="mt-0.5 text-[9px] font-normal text-slate-400">Fee {tx.currency} {tx.fee.toLocaleString()}</div>
                           )}
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.type}</td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.direction || "—"}</td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">
-                          <div>{tx.recipientAccount || "—"}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">
+                        {showWalletBalances && (
+                          <>
+                            <td className="px-3 py-3 text-right align-top text-[10px] font-medium text-slate-700">
+                              {tx.escrowWalletBalance != null
+                                ? `${tx.currency} ${Number(tx.escrowWalletBalance).toLocaleString()}`
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-3 text-right align-top text-[10px] font-medium text-slate-700">
+                              {tx.commissionWalletBalance != null
+                                ? `${tx.currency} ${Number(tx.commissionWalletBalance).toLocaleString()}`
+                                : "—"}
+                            </td>
+                          </>
+                        )}
+                        <td className="px-3 py-3 align-top text-[10px] font-medium capitalize text-slate-600">
+                          {tx.type.toLowerCase().replaceAll("_", " ")}
+                        </td>
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-500">{tx.direction || "—"}</td>
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-600">
+                          <div className="max-w-[150px] truncate">{tx.recipientAccount || "—"}</div>
+                          <div className="mt-0.5 max-w-[150px] truncate text-[9px] text-slate-400">
                             {tx.recipientName || "N/A"}
                           </div>
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-600">
                           {tx.providerName ? (
                             <>
                               {tx.providerName}
                               {tx.providerType && (
-                                <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">
+                                <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[8px] uppercase text-slate-500">
                                   {tx.providerType}
                                 </span>
                               )}
@@ -900,31 +590,39 @@ export default function TransactionsPage() {
                             "—"
                           )}
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs">
-                          <span className={getStatusBadgeClass(tx.status)}>
-                            {tx.status}
+                        <td className="px-3 py-3 align-top">
+                          <span
+                            className={
+                              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold capitalize " +
+                              (isSuccess
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : isPending
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-rose-200 bg-rose-50 text-rose-700")
+                            }
+                          >
+                            <span className="size-1 rounded-full bg-current" />
+                            {tx.status.toLowerCase()}
                           </span>
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.channel || "—"}</td>
-                        <td className="py-2 pr-4 align-top text-xs text-right">
-                          <div className="inline-flex items-center gap-2 justify-end">
-                            <button
-                              type="button"
-                              onClick={() => openDetailModal(tx)}
-                              className="inline-flex items-center px-2 py-1 rounded-md border border-gray-200 text-[11px] text-gray-700 hover:bg-gray-50"
-                              aria-label="View transaction details"
-                            >
-                              <Eye  className="w-3 h-3 cursor-pointer" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openReversalPopup(tx)}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-[11px] text-[#08163d] hover:bg-gray-50"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              Reverse
-                            </button>
-                          </div>
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-500">{tx.channel || "—"}</td>
+                        <td className="px-3 py-3 text-right align-top">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTx(tx)}
+                            className="mr-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-semibold text-slate-600 opacity-70 hover:bg-slate-100 hover:text-[#08163d] group-hover:opacity-100"
+                          >
+                            <Eye className="size-3" />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openReversalPopup(tx)}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-semibold text-[#08163d] opacity-70 hover:bg-[#eef2ff] group-hover:opacity-100"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Reverse
+                          </button>
                         </td>
                       </tr>
                     )
@@ -934,11 +632,11 @@ export default function TransactionsPage() {
               </div>
 
               {/* Pagination controls */}
-              <div className="flex items-center justify-between mt-4 text-xs text-gray-600">
+              <div className="flex items-center justify-between border-t border-slate-200 px-3 py-2.5 text-[10px] text-slate-500">
                 <div className="flex items-center gap-2">
                   <span>Rows per page:</span>
                   <select
-                    className="border rounded-md px-2 py-1"
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 outline-none"
                     value={pageSize}
                     onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
                   >
@@ -952,14 +650,14 @@ export default function TransactionsPage() {
                     Page {page} of {totalPages}
                   </span>
                   <button
-                    className="px-2 py-1 border rounded-md disabled:opacity-50"
+                    className="h-7 rounded-md border border-slate-200 px-2.5 font-medium hover:bg-slate-50 disabled:opacity-50"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
                   >
                     Prev
                   </button>
                   <button
-                    className="px-2 py-1 border rounded-md disabled:opacity-50"
+                    className="h-7 rounded-md border border-slate-200 px-2.5 font-medium hover:bg-slate-50 disabled:opacity-50"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
                   >
@@ -971,9 +669,171 @@ export default function TransactionsPage() {
           )}
         </div>
       </main>
-      {/* Transaction detail modal */}
+
+      {/* Transaction details drawer */}
       {selectedTx && (
-        <TransactionDetailModal tx={selectedTx} onClose={closeDetailModal} />
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <button
+            type="button"
+            aria-label="Close transaction details"
+            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
+            onClick={() => setSelectedTx(null)}
+          />
+          <aside className="relative z-10 flex h-full w-full max-w-md animate-in slide-in-from-right flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
+              <div>
+                <h2 className="text-sm font-semibold text-[#08163d]">Transaction details</h2>
+                <p className="text-[10px] text-slate-400">Complete payment information</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTx(null)}
+                className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="mb-5 rounded-xl bg-[#08163d] p-4 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-white/55">Amount</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {selectedTx.currency} {selectedTx.amount.toLocaleString()}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-semibold capitalize ${
+                      selectedTx.status === "SUCCESS"
+                        ? "bg-emerald-400/15 text-emerald-300"
+                        : selectedTx.status === "PENDING" || selectedTx.status === "PROCESSING"
+                          ? "bg-amber-400/15 text-amber-300"
+                          : "bg-rose-400/15 text-rose-300"
+                    }`}
+                  >
+                    <span className="size-1 rounded-full bg-current" />
+                    {selectedTx.status.toLowerCase()}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-[10px]">
+                  <div>
+                    <p className="text-white/45">Fee</p>
+                    <p className="mt-0.5 font-medium">{selectedTx.currency} {selectedTx.fee.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/45">Net amount</p>
+                    <p className="mt-0.5 font-medium">{selectedTx.currency} {selectedTx.netAmount.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <section className="mb-5">
+                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Transaction
+                </h3>
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                  {[
+                    ["Reference", selectedTx.reference || selectedTx.externalReference || "—"],
+                    ["Partner reference", selectedTx.partnerReference || "—"],
+                    ["Transaction ID", selectedTx.id],
+                    ["Type", selectedTx.type.toLowerCase().replaceAll("_", " ")],
+                    ["Direction", selectedTx.direction || "—"],
+                    ["Channel", selectedTx.channel || "—"],
+                    ["Mode", selectedTx.mode || "—"],
+                    ["Created", new Date(selectedTx.createdAt).toLocaleString()],
+                    ["Processed", selectedTx.processedAt ? new Date(selectedTx.processedAt).toLocaleString() : "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-5 px-3 py-2.5 text-[10px]">
+                      <span className="shrink-0 text-slate-400">{label}</span>
+                      <span className={`text-right font-medium capitalize text-slate-700 ${label.includes("ID") || label.includes("Reference") ? "break-all font-mono" : ""}`}>
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="mb-5">
+                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Recipient & provider
+                </h3>
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                  {[
+                    ["Recipient name", selectedTx.recipientName || "—"],
+                    ["Recipient account", selectedTx.recipientAccount || "—"],
+                    ["Provider", selectedTx.providerName || "—"],
+                    ["Provider type", selectedTx.providerType || "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-5 px-3 py-2.5 text-[10px]">
+                      <span className="shrink-0 text-slate-400">{label}</span>
+                      <span className="break-all text-right font-medium text-slate-700">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {showWalletBalances && (
+                <section className="mb-5">
+                  <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Wallet balances
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-[9px] text-slate-400">Escrow balance</p>
+                      <p className="mt-1 text-xs font-semibold text-[#08163d]">
+                        {selectedTx.escrowWalletBalance != null
+                          ? `${selectedTx.currency} ${Number(selectedTx.escrowWalletBalance).toLocaleString()}`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-[9px] text-slate-400">Commission balance</p>
+                      <p className="mt-1 text-xs font-semibold text-[#08163d]">
+                        {selectedTx.commissionWalletBalance != null
+                          ? `${selectedTx.currency} ${Number(selectedTx.commissionWalletBalance).toLocaleString()}`
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {selectedTx.description && (
+                <section>
+                  <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Description
+                  </h3>
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[10px] leading-5 text-slate-600">
+                    {selectedTx.description}
+                  </p>
+                </section>
+              )}
+            </div>
+
+            <div className="flex shrink-0 gap-2 border-t border-slate-200 p-4">
+              <button
+                type="button"
+                onClick={() => setSelectedTx(null)}
+                className="h-9 flex-1 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const tx = selectedTx
+                  setSelectedTx(null)
+                  openReversalPopup(tx)
+                }}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#08163d] text-[11px] font-semibold text-white hover:bg-[#0b1d52]"
+              >
+                <RotateCcw className="size-3.5" />
+                Request reversal
+              </button>
+            </div>
+          </aside>
+        </div>
       )}
 
       {/* Reversal popup */}

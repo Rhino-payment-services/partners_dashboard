@@ -3,12 +3,11 @@
 import React, { useCallback, useEffect, useState } from "react"
 import {
   listPartnerReversalRequests,
-  submitPartnerReversalRequest,
   cancelPartnerReversalRequest,
   PartnerReversalStatus,
 } from "@/lib/api"
 import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
-import { AlertCircle, Eye, Loader2, XCircle } from "lucide-react"
+import { AlertCircle, Eye, Loader2, X, XCircle } from "lucide-react"
 
 interface PartnerReversalRequest {
   id: string
@@ -41,6 +40,26 @@ interface PartnerReversalListResponse {
     limit: number
     totalPages: number
   }
+}
+
+function statusPillClass(status: string) {
+  if (status === "APPROVED" || status === "SUCCESS") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  }
+  if (status === "PENDING" || status === "PROCESSING") {
+    return "border-amber-200 bg-amber-50 text-amber-700"
+  }
+  if (status === "REJECTED" || status === "FAILED") {
+    return "border-rose-200 bg-rose-50 text-rose-700"
+  }
+  return "border-slate-200 bg-slate-50 text-slate-600"
+}
+
+function drawerStatusClass(status: string) {
+  if (status === "APPROVED") return "bg-emerald-400/15 text-emerald-300"
+  if (status === "PENDING") return "bg-amber-400/15 text-amber-300"
+  if (status === "REJECTED") return "bg-rose-400/15 text-rose-300"
+  return "bg-white/10 text-white/70"
 }
 
 export default function PartnerReversalsPage() {
@@ -86,6 +105,7 @@ export default function PartnerReversalsPage() {
       setError(null)
       setCancelLoading(true)
       await cancelPartnerReversalRequest(id)
+      setSelectedRequest(null)
       await fetchReversals()
     } catch (err: any) {
       console.error("Failed to cancel reversal request", err)
@@ -98,154 +118,157 @@ export default function PartnerReversalsPage() {
 
   if (permissionsLoading) {
     return (
-      <div className="flex flex-col min-h-screen bg-gray-50">
-        <main className="flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-5xl">
-          <div className="text-center py-8 text-gray-500">Loading...</div>
+      <div className="flex min-h-full min-w-0 flex-col bg-[#f8f9fb]">
+        <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 md:p-6">
+          <div className="py-8 text-center text-xs text-slate-500">Loading...</div>
         </main>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <main className="flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-5xl">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-[#08163d]">Reversal Requests</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Track the status of all reversal requests submitted from your transactions.
-          </p>
+    <div className="flex min-h-full min-w-0 flex-col bg-[#f8f9fb]">
+      <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 md:p-6">
+        <div className="mb-5 flex items-end justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-[#08163d]">Reversal Requests</h1>
+            <p className="mt-1 text-xs text-slate-500">
+              Track the status of all reversal requests submitted from your transactions.
+            </p>
+          </div>
+          {data && (
+            <div className="text-right text-[11px] text-slate-500">
+              <div>
+                <span className="font-semibold text-[#08163d]">{data.meta.total.toLocaleString()}</span> requests
+              </div>
+              <div>Page {page} of {totalPages}</div>
+            </div>
+          )}
         </div>
 
-        {/* Error */}
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5" />
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+            <AlertCircle className="mt-0.5 size-4" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* List of reversal requests */}
-        <section className="bg-white rounded-2xl shadow-md p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[#08163d]">My Reversal Requests</h2>
-              <p className="text-xs text-gray-500">
-                Status: PENDING, APPROVED, REJECTED, CANCELLED
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col">
-                <label className="text-xs text-gray-500 mb-1">Status</label>
-                <select
-                  className="border rounded-md px-2 py-1 text-sm w-40"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as PartnerReversalStatus | "")
-                    setPage(1)
-                  }}
-                >
-                  <option value="">All</option>
-                  <option value="PENDING">PENDING</option>
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="REJECTED">REJECTED</option>
-                  <option value="CANCELLED">CANCELLED</option>
-                </select>
-              </div>
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex flex-wrap items-end gap-2.5">
+            <div className="flex flex-col">
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Status</label>
+              <select
+                className="h-8 w-36 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as PartnerReversalStatus | "")
+                  setPage(1)
+                }}
+              >
+                <option value="">All</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
             </div>
           </div>
+        </div>
 
+        <div className="overflow-hidden bg-white">
           {loading ? (
-            <div className="py-8 text-center text-gray-500 flex flex-col items-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Loading reversal requests...</span>
+            <div className="flex items-center justify-center py-14 text-xs text-slate-500">
+              <Loader2 className="mr-2 size-4 animate-spin" /> Loading reversal requests...
             </div>
           ) : !data?.data?.length ? (
-            <div className="py-8 text-center text-gray-500">
-              No reversal requests found.
-            </div>
+            <div className="py-14 text-center text-xs text-slate-500">No reversal requests found.</div>
           ) : (
             <>
-              <div className="overflow-x-auto -mx-2">
-                <table className="min-w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
-                      <th className="px-2 py-2 border-b">#</th>
-                      <th className="px-2 py-2 border-b">Transaction Ref</th>
-                      <th className="px-2 py-2 border-b">Amount</th>
-                      <th className="px-2 py-2 border-b">Status</th>
-                      <th className="px-2 py-2 border-b">Reason</th>
-                      <th className="px-2 py-2 border-b">Created</th>
-                      <th className="px-2 py-2 border-b text-right">Action</th>
+              <div className="max-h-[calc(100vh-300px)] overflow-x-auto overflow-y-auto">
+                <table className="min-w-full whitespace-nowrap text-left">
+                  <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                    <tr className="border-b border-slate-200 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      <th className="px-3 py-2.5">#</th>
+                      <th className="px-3 py-2.5">Transaction Ref</th>
+                      <th className="px-3 py-2.5">Amount</th>
+                      <th className="px-3 py-2.5">Status</th>
+                      <th className="px-3 py-2.5">Reason</th>
+                      <th className="px-3 py-2.5">Created</th>
+                      <th className="px-3 py-2.5 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.data.map((req, index) => {
                       const amount = req.transaction?.amount ?? 0
                       const currency = req.transaction?.currency ?? ""
-                      const created = new Date(req.createdAt).toLocaleString()
+                      const created = new Date(req.createdAt)
+                      const dateStr = created.toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "2-digit",
+                      })
+                      const timeStr = created.toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
                       const isPending = req.status === "PENDING"
 
                       return (
-                        <tr key={req.id} className="border-b last:border-b-0">
-                          <td className="px-2 py-2 text-xs font-mono">
-                            {(index + 1).toString().padStart(3, "0")}
+                        <tr
+                          key={req.id}
+                          className="group border-b border-slate-100 transition-colors last:border-b-0 hover:bg-[#fafbfe]"
+                        >
+                          <td className="px-3 py-3 align-top font-mono text-[10px] text-slate-400">
+                            {(index + 1 + (page - 1) * limit).toString().padStart(3, "0")}
                           </td>
-                          <td className="px-2 py-2">
-                            <div className="text-xs font-mono">
+                          <td className="px-3 py-3 align-top">
+                            <div className="max-w-[220px] truncate font-mono text-[10px] font-medium text-[#08163d]">
                               {req.transaction?.reference || req.transaction?.id || "—"}
                             </div>
-                            <div className="text-[11px] text-gray-500">
-                              {req.transaction?.type} · {req.transaction?.status}
+                            <div className="mt-0.5 text-[9px] capitalize text-slate-400">
+                              {(req.transaction?.type || "—").toLowerCase().replaceAll("_", " ")} · {(req.transaction?.status || "—").toLowerCase()}
                             </div>
                           </td>
-                          <td className="px-2 py-2 text-sm">
-                            {amount.toLocaleString()} {currency}
+                          <td className="px-3 py-3 align-top text-[11px] font-semibold text-[#08163d]">
+                            {currency} {amount.toLocaleString()}
                           </td>
-                          <td className="px-2 py-2">
+                          <td className="px-3 py-3 align-top">
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                req.status === "PENDING"
-                                  ? "bg-yellow-50 text-yellow-800 border border-yellow-200"
-                                  : req.status === "APPROVED"
-                                  ? "bg-green-50 text-green-800 border border-green-200"
-                                  : req.status === "REJECTED"
-                                  ? "bg-red-50 text-red-800 border border-red-200"
-                                  : "bg-gray-50 text-gray-700 border border-gray-200"
-                              }`}
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold capitalize ${statusPillClass(req.status)}`}
                             >
-                              {req.status}
+                              <span className="size-1 rounded-full bg-current" />
+                              {req.status.toLowerCase()}
                             </span>
                           </td>
-                          <td className="px-2 py-2 text-xs max-w-xs">
-                            <div className="truncate" title={req.reason}>
+                          <td className="px-3 py-3 align-top text-[10px] text-slate-600">
+                            <div className="max-w-[220px] truncate" title={req.reason}>
                               {req.reason}
                             </div>
                           </td>
-                          <td className="px-2 py-2 text-xs text-gray-500">
-                            {created}
+                          <td className="px-3 py-3 align-top text-[10px] text-slate-500">
+                            <div className="font-medium text-slate-600">{dateStr}</div>
+                            <div className="mt-0.5 text-[9px] text-slate-400">{timeStr}</div>
                           </td>
-                          <td className="px-2 py-2 text-right">
-                            <div className="inline-flex items-center gap-2">
+                          <td className="px-3 py-3 text-right align-top">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRequest(req)}
+                              className="mr-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-semibold text-slate-600 opacity-70 hover:bg-slate-100 hover:text-[#08163d] group-hover:opacity-100"
+                            >
+                              <Eye className="size-3" />
+                              View
+                            </button>
+                            {isPending && (
                               <button
                                 type="button"
-                                onClick={() => setSelectedRequest(req)}
-                                className="inline-flex items-center px-2 py-1 rounded-md border border-gray-200 text-xs text-gray-700 hover:bg-gray-50"
+                                onClick={() => setConfirmingCancelForId(req.id)}
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-semibold text-rose-600 opacity-70 hover:bg-rose-50 group-hover:opacity-100"
+                                disabled={cancelLoading}
                               >
-                                <Eye className="w-3 h-3 mr-1" />
-                                View
+                                <XCircle className="size-3" />
+                                Cancel
                               </button>
-                              {isPending && (
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmingCancelForId(req.id)}
-                                  className="inline-flex items-center px-2 py-1 rounded-md border border-red-200 text-xs text-red-700 hover:bg-red-50 disabled:opacity-60"
-                                  disabled={cancelLoading}
-                                >
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Cancel
-                                </button>
-                              )}
-                            </div>
+                            )}
                           </td>
                         </tr>
                       )
@@ -254,8 +277,7 @@ export default function PartnerReversalsPage() {
                 </table>
               </div>
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4 text-xs text-gray-500">
+              <div className="flex items-center justify-between border-t border-slate-200 px-3 py-2.5 text-[10px] text-slate-500">
                 <div>
                   Page {data.meta.page} of {totalPages} · Total {data.meta.total}{" "}
                   request{data.meta.total === 1 ? "" : "s"}
@@ -264,14 +286,14 @@ export default function PartnerReversalsPage() {
                   <button
                     disabled={page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="px-2 py-1 border rounded disabled:opacity-50"
+                    className="h-7 rounded-md border border-slate-200 px-2.5 font-medium hover:bg-slate-50 disabled:opacity-50"
                   >
                     Previous
                   </button>
                   <button
                     disabled={page >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    className="px-2 py-1 border rounded disabled:opacity-50"
+                    className="h-7 rounded-md border border-slate-200 px-2.5 font-medium hover:bg-slate-50 disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -279,144 +301,183 @@ export default function PartnerReversalsPage() {
               </div>
             </>
           )}
-        </section>
+        </div>
+      </main>
 
-        {/* Detail modal */}
-        {selectedRequest && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 relative">
+      {selectedRequest && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <button
+            type="button"
+            aria-label="Close reversal details"
+            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
+            onClick={() => setSelectedRequest(null)}
+          />
+          <aside className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
+              <div>
+                <h2 className="text-sm font-semibold text-[#08163d]">Reversal details</h2>
+                <p className="text-[10px] text-slate-400">Complete request information</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedRequest(null)}
-                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+                className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
-                <XCircle className="w-5 h-5" />
+                <X className="size-4" />
               </button>
+            </div>
 
-              <h2 className="text-lg font-semibold text-[#08163d] mb-1">Reversal Details</h2>
-              <p className="text-xs text-gray-500 mb-4">
-                Full information about this reversal request.
-              </p>
-
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500">Request ID</span>
-                  <span className="font-mono text-xs break-all">{selectedRequest.id}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500">Transaction Ref</span>
-                  <span className="font-mono text-xs break-all">
-                    {selectedRequest.transaction?.reference ||
-                      selectedRequest.transaction?.id ||
-                      "—"}
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="mb-5 rounded-xl bg-[#08163d] p-4 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-white/55">Amount</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {selectedRequest.transaction?.currency || "UGX"}{" "}
+                      {(selectedRequest.transaction?.amount ?? 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-semibold capitalize ${drawerStatusClass(selectedRequest.status)}`}
+                  >
+                    <span className="size-1 rounded-full bg-current" />
+                    {selectedRequest.status.toLowerCase()}
                   </span>
                 </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500">Amount</span>
-                  <span>
-                    {(selectedRequest.transaction?.amount ?? 0).toLocaleString()}{" "}
-                    {selectedRequest.transaction?.currency}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500">Transaction Status</span>
-                  <span>{selectedRequest.transaction?.status || "—"}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500">Reversal Status</span>
-                  <span>{selectedRequest.status}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500">Created At</span>
-                  <span>{new Date(selectedRequest.createdAt).toLocaleString()}</span>
-                </div>
-                {selectedRequest.reviewedAt && (
-                  <div className="flex justify-between gap-4">
-                    <span className="text-gray-500">Reviewed At</span>
-                    <span>{new Date(selectedRequest.reviewedAt).toLocaleString()}</span>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-[10px]">
+                  <div>
+                    <p className="text-white/45">Transaction status</p>
+                    <p className="mt-0.5 font-medium capitalize">
+                      {(selectedRequest.transaction?.status || "—").toLowerCase()}
+                    </p>
                   </div>
-                )}
-                {selectedRequest.cancelledAt && (
-                  <div className="flex justify-between gap-4">
-                    <span className="text-gray-500">Cancelled At</span>
-                    <span>{new Date(selectedRequest.cancelledAt).toLocaleString()}</span>
+                  <div>
+                    <p className="text-white/45">Type</p>
+                    <p className="mt-0.5 font-medium capitalize">
+                      {(selectedRequest.transaction?.type || "—").toLowerCase().replaceAll("_", " ")}
+                    </p>
                   </div>
-                )}
-                <div>
-                  <span className="block text-gray-500 mb-1">Reason</span>
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {selectedRequest.reason}
+                </div>
+              </div>
+
+              <section className="mb-5">
+                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Request
+                </h3>
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                  {[
+                    ["Request ID", selectedRequest.id],
+                    ["Transaction ref", selectedRequest.transaction?.reference || selectedRequest.transaction?.id || "—"],
+                    ["Transaction ID", selectedRequest.transactionId],
+                    ["Created", new Date(selectedRequest.createdAt).toLocaleString()],
+                    ["Reviewed", selectedRequest.reviewedAt ? new Date(selectedRequest.reviewedAt).toLocaleString() : "—"],
+                    ["Cancelled", selectedRequest.cancelledAt ? new Date(selectedRequest.cancelledAt).toLocaleString() : "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-5 px-3 py-2.5 text-[10px]">
+                      <span className="shrink-0 text-slate-400">{label}</span>
+                      <span
+                        className={`break-all text-right font-medium text-slate-700 ${
+                          label.includes("ID") || label.includes("ref") ? "font-mono" : ""
+                        }`}
+                      >
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="mb-5">
+                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Reason
+                </h3>
+                <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[10px] leading-5 whitespace-pre-wrap text-slate-600">
+                  {selectedRequest.reason}
+                </p>
+              </section>
+
+              {selectedRequest.details && (
+                <section className="mb-5">
+                  <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Details
+                  </h3>
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[10px] leading-5 whitespace-pre-wrap text-slate-600">
+                    {selectedRequest.details}
                   </p>
-                </div>
-                {selectedRequest.details && (
-                  <div>
-                    <span className="block text-gray-500 mb-1">Details</span>
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {selectedRequest.details}
-                    </p>
-                  </div>
-                )}
-                {selectedRequest.reviewNote && (
-                  <div>
-                    <span className="block text-gray-500 mb-1">Review Note</span>
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {selectedRequest.reviewNote}
-                    </p>
-                  </div>
-                )}
-              </div>
+                </section>
+              )}
 
-              <div className="mt-6 flex justify-end">
+              {selectedRequest.reviewNote && (
+                <section>
+                  <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Review note
+                  </h3>
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[10px] leading-5 whitespace-pre-wrap text-slate-600">
+                    {selectedRequest.reviewNote}
+                  </p>
+                </section>
+              )}
+            </div>
+
+            <div className="flex shrink-0 gap-2 border-t border-slate-200 p-4">
+              <button
+                type="button"
+                onClick={() => setSelectedRequest(null)}
+                className="h-9 flex-1 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              {selectedRequest.status === "PENDING" && (
                 <button
                   type="button"
-                  onClick={() => setSelectedRequest(null)}
-                  className="px-4 py-2 text-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  onClick={() => setConfirmingCancelForId(selectedRequest.id)}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-600 text-[11px] font-semibold text-white hover:bg-rose-700"
                 >
-                  Close
+                  <XCircle className="size-3.5" />
+                  Cancel request
                 </button>
-              </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {confirmingCancelForId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-xl mx-4">
+            <h2 className="text-lg font-semibold text-[#08163d]">Cancel reversal request?</h2>
+            <p className="text-sm text-gray-600">
+              This will cancel the pending reversal request. You can create a new request again
+              later for the same transaction if needed.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingCancelForId(null)}
+                className="rounded-md border px-3 py-1.5 text-sm"
+                disabled={cancelLoading}
+              >
+                Keep request
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCancel(confirmingCancelForId)}
+                disabled={cancelLoading}
+                className="inline-flex items-center rounded-md bg-red-600 px-4 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {cancelLoading ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Cancelling...
+                  </>
+                ) : (
+                  "Yes, cancel"
+                )}
+              </button>
             </div>
           </div>
-        )}
-
-        {/* Cancel confirmation modal */}
-        {confirmingCancelForId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-[#08163d]">Cancel reversal request?</h2>
-              <p className="text-sm text-gray-600">
-                This will cancel the pending reversal request. You can create a new request again
-                later for the same transaction if needed.
-              </p>
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmingCancelForId(null)}
-                  className="px-3 py-1.5 rounded-md border text-sm"
-                  disabled={cancelLoading}
-                >
-                  Keep request
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCancel(confirmingCancelForId)}
-                  disabled={cancelLoading}
-                  className="inline-flex items-center px-4 py-1.5 rounded-md bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-60"
-                >
-                  {cancelLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Cancelling...
-                    </>
-                  ) : (
-                    "Yes, cancel"
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   )
 }
