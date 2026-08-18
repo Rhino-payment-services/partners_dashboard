@@ -213,3 +213,89 @@ export async function cancelPartnerReversalRequest(requestId: string) {
     method: 'PATCH',
   })
 }
+
+// ─── Partner Merchants ─────────────────────────────────────────────────────────
+
+export type PartnerMerchantStatus = 'ACTIVE' | 'INACTIVE' | 'BLOCKED'
+
+export interface PartnerMerchantDocument {
+  id: string
+  documentType: string
+  documentUrl?: string | null
+  requirement: string
+  status: string
+}
+
+export interface PartnerMerchant {
+  id: string
+  merchantId: string
+  apiPartnerId: string
+  merchantName: string
+  industry: string
+  contactEmail?: string | null
+  contactPhone?: string | null
+  contactPerson?: string | null
+  status: PartnerMerchantStatus | string
+  isBaseMerchant: boolean
+  documents?: PartnerMerchantDocument[]
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listPartnerMerchants(): Promise<PartnerMerchant[]> {
+  const response = await apiRequest('/partner/v1/merchants', { method: 'GET' })
+  return response.data || response || []
+}
+
+export async function registerPartnerMerchant(input: {
+  merchantName: string
+  industry: string
+  contactEmail?: string
+  contactPhone?: string
+  contactPerson?: string
+}): Promise<PartnerMerchant> {
+  const response = await apiRequest('/partner/v1/merchants', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return response.data || response
+}
+
+export async function updatePartnerMerchant(
+  merchantId: string,
+  input: {
+    merchantName?: string
+    industry?: string
+    contactEmail?: string
+    contactPhone?: string
+    contactPerson?: string
+    status?: 'ACTIVE' | 'INACTIVE'
+  },
+): Promise<PartnerMerchant> {
+  const response = await apiRequest(
+    `/partner/v1/merchants/${encodeURIComponent(merchantId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+  )
+  return response.data || response
+}
+
+export async function uploadPartnerMerchantDocument(
+  merchantId: string,
+  input: {
+    documentType: string
+    documentUrl: string
+    documentNumber?: string
+  },
+): Promise<PartnerMerchantDocument> {
+  const response = await apiRequest(
+    `/partner/v1/merchants/${encodeURIComponent(merchantId)}/documents`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+  return response.data || response
+}

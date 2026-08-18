@@ -25,14 +25,17 @@ export default function DashboardHeader() {
   }, [])
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 md:px-6 bg-white">
-      <SidebarTrigger className="-ml-1" />
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur md:px-6">
+      <SidebarTrigger className="-ml-1 size-8 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-[#08163d]" />
       <div className="flex-1" />
       {loading ? (
-        <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+        <div className="h-7 w-24 animate-pulse rounded-full bg-slate-100" />
       ) : partnerName ? (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#08163d] text-white rounded-md">
-          <span className="font-semibold text-sm md:text-base">{partnerName}</span>
+        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
+          <div className="flex size-5 items-center justify-center rounded-full bg-[#08163d] text-[9px] font-semibold text-white">
+            {partnerName.slice(0, 2).toUpperCase()}
+          </div>
+          <span className="max-w-40 truncate text-xs font-semibold text-slate-700">{partnerName}</span>
         </div>
       ) : null}
     </header>

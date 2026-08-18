@@ -2,7 +2,17 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import { getPartnerTransactions, submitPartnerReversalRequest } from "@/lib/api"
-import { ArrowUpDown, Loader2, AlertCircle, RotateCcw } from "lucide-react"
+import {
+  ArrowUpDown,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
+  Search,
+  Download,
+  FileJson,
+  Eye,
+  X,
+} from "lucide-react"
 import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
 
 interface PartnerTransaction {
@@ -25,6 +35,8 @@ interface PartnerTransaction {
   providerName?: string | null
   providerType?: string | null
   partnerReference?: string | null
+  escrowWalletBalance?: number | null
+  commissionWalletBalance?: number | null
   createdAt: string
   processedAt: string | null
 }
@@ -34,6 +46,7 @@ interface TransactionResponse {
   total: number
   page: number
   pageSize: number
+  showWalletBalances?: boolean
 }
 
 export default function TransactionsPage() {
@@ -50,7 +63,11 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState<string>("")
   const [minAmount, setMinAmount] = useState<string>("")
   const [maxAmount, setMaxAmount] = useState<string>("")
-  const [fromDate, setFromDate] = useState<string>("")
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().slice(0, 10)
+  })
   const [toDate, setToDate] = useState<string>("")
   const [exporting, setExporting] = useState(false)
 
@@ -62,8 +79,10 @@ export default function TransactionsPage() {
   const [reversalSubmitting, setReversalSubmitting] = useState(false)
   const [reversalError, setReversalError] = useState<string | null>(null)
   const [reversalSuccess, setReversalSuccess] = useState<string | null>(null)
+  const [selectedTx, setSelectedTx] = useState<PartnerTransaction | null>(null)
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
+  const showWalletBalances = Boolean(data?.showWalletBalances)
 
   const fetchTransactions = useCallback(async () => {
     try {
@@ -162,7 +181,24 @@ export default function TransactionsPage() {
         `Export may be incomplete: downloaded ${rows.length} of ${data.total} matching transactions.`,
       )
     }
-    const headers = ["Date", "Reference", "Partner Reference", "Type", "Direction", "Status", "Channel", "Amount", "Currency", "Fee", "NetAmount"]
+    const headers = [
+      "Date",
+      "Reference",
+      "Partner Reference",
+      "Type",
+      "Direction",
+      "Status",
+      "Channel",
+      "Amount",
+      "Currency",
+      "Fee",
+      "NetAmount",
+      "Telephone Number",
+      "MNO",
+      ...(showWalletBalances
+        ? ["Escrow Wallet Balance", "Commission Wallet Balance"]
+        : []),
+    ]
     const csvRows = rows.map((tx) => {
       const created = new Date(tx.createdAt)
       const dateStr = created.toISOString()
@@ -178,6 +214,14 @@ export default function TransactionsPage() {
         tx.currency,
         tx.fee,
         tx.netAmount,
+        tx.recipientAccount || "",
+        tx.providerName || "",
+        ...(showWalletBalances
+          ? [
+              tx.escrowWalletBalance ?? "",
+              tx.commissionWalletBalance ?? "",
+            ]
+          : []),
       ]
     })
     const csvContent = [headers, ...csvRows]
@@ -295,39 +339,42 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <main className="flex-1 p-4 md:p-6 lg:p-8 mx-auto w-full max-w-7xl">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="flex min-h-full min-w-0 flex-col bg-[#f8f9fb]">
+      <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 md:p-6">
+        <div className="mb-5 flex items-end justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-[#08163d]">Transactions</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-xl font-semibold tracking-tight text-[#08163d]">Transactions</h1>
+            <p className="mt-1 text-xs text-slate-500">
               All transactions processed via your RukaPay partner account.
             </p>
           </div>
           {data && (
-            <div className="text-right text-sm text-gray-500">
-              <div>Total: <span className="font-semibold text-[#08163d]">{data.total}</span></div>
+            <div className="text-right text-[11px] text-slate-500">
+              <div><span className="font-semibold text-[#08163d]">{data.total.toLocaleString()}</span> transactions</div>
               <div>Page {page} of {totalPages}</div>
             </div>
           )}
         </div>
 
         {/* Filters & actions */}
-        <div className="bg-white rounded-2xl shadow-md p-4 mb-4">
-          <div className="flex flex-wrap gap-3 items-end">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex flex-wrap items-end gap-2.5">
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Search (ref / description)</label>
-              <input
-                className="border rounded-md px-2 py-1 text-sm w-48"
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              />
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Search</label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  className="h-8 w-52 rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-xs outline-none transition focus:border-[#08163d]/40 focus:ring-2 focus:ring-[#08163d]/5"
+                  placeholder="Reference or description"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                />
+              </div>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Status</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Status</label>
               <select
-                className="border rounded-md px-2 py-1 text-sm w-32"
+                className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
               >
@@ -340,9 +387,9 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Direction</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Direction</label>
               <select
-                className="border rounded-md px-2 py-1 text-sm w-32"
+                className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={directionFilter}
                 onChange={(e) => { setDirectionFilter(e.target.value); setPage(1) }}
               >
@@ -352,104 +399,114 @@ export default function TransactionsPage() {
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Channel</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Channel</label>
               <input
-                className="border rounded-md px-2 py-1 text-sm w-32"
+                className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 placeholder="WEB / API..."
                 value={channelFilter}
                 onChange={(e) => { setChannelFilter(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">From date</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">From</label>
               <input
                 type="date"
-                className="border rounded-md px-2 py-1 text-sm"
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={fromDate}
                 onChange={(e) => { setFromDate(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">To date</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">To</label>
               <input
                 type="date"
-                className="border rounded-md px-2 py-1 text-sm"
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={toDate}
                 onChange={(e) => { setToDate(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Min amount</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Min amount</label>
               <input
                 type="number"
-                className="border rounded-md px-2 py-1 text-sm w-28"
+                className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={minAmount}
                 onChange={(e) => { setMinAmount(e.target.value); setPage(1) }}
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-xs text-gray-500 mb-1">Max amount</label>
+              <label className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Max amount</label>
               <input
                 type="number"
-                className="border rounded-md px-2 py-1 text-sm w-28"
+                className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs outline-none focus:border-[#08163d]/40"
                 value={maxAmount}
                 onChange={(e) => { setMaxAmount(e.target.value); setPage(1) }}
               />
             </div>
-            <div className="flex gap-2 ml-auto">
+            <div className="ml-auto flex gap-1.5">
               <button
                 onClick={handleResetFilters}
-                className="px-3 py-1 text-xs border rounded-md text-gray-600 hover:bg-gray-50"
+                className="h-8 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
               >
                 Reset
               </button>
               <button
                 onClick={handleExportCsv}
                 disabled={exporting || !data?.total}
-                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-[#08163d] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {exporting ? "Exporting..." : "Export CSV"}
+                <Download className="size-3.5" />
+                {exporting ? "Exporting..." : "CSV"}
               </button>
               <button
                 onClick={handleExportJson}
                 disabled={exporting || !data?.total}
-                className="px-3 py-1 text-xs border rounded-md text-[#08163d] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-medium text-[#08163d] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Export JSON
+                <FileJson className="size-3.5" />
+                JSON
               </button>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-md p-4">
+        <div className="overflow-hidden bg-white">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-gray-500">
-              <Loader2 className="animate-spin mr-2" /> Loading transactions...
+            <div className="flex items-center justify-center py-14 text-xs text-slate-500">
+              <Loader2 className="mr-2 size-4 animate-spin" /> Loading transactions...
             </div>
           ) : error ? (
-            <div className="py-10 text-center text-red-600 text-sm">{error}</div>
+            <div className="py-14 text-center text-xs text-red-600">{error}</div>
           ) : !data || data.items.length === 0 ? (
-            <div className="py-10 text-center text-gray-500 text-sm">No transactions found yet.</div>
+            <div className="py-14 text-center text-xs text-slate-500">No transactions found yet.</div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="text-gray-500 border-b text-xs uppercase">
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Reference</th>
-                      <th className="py-2 pr-4">Partner Ref</th>
-                      <th className="py-2 pr-4 flex items-center gap-1">
+              <div className="max-h-[calc(100vh-300px)] overflow-x-auto overflow-y-auto">
+                <table className="min-w-full whitespace-nowrap text-left">
+                  <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                    <tr className="border-b border-slate-200 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                      <th className="px-3 py-2.5">Date</th>
+                      <th className="px-3 py-2.5">Reference</th>
+                      <th className="px-3 py-2.5">Partner Ref</th>
+                      <th className="px-3 py-2.5">
+                        <span className="flex items-center gap-1">
                         Amount
-                        <ArrowUpDown className="w-3 h-3 text-gray-400" />
+                          <ArrowUpDown className="size-3 text-slate-300" />
+                        </span>
                       </th>
-                      <th className="py-2 pr-4">Type</th>
-                      <th className="py-2 pr-4">Direction</th>
-                      <th className="py-2 pr-4">Recipient</th>
-                      <th className="py-2 pr-4">Provider</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Channel</th>
-                      <th className="py-2 pr-4 text-right">Actions</th>
+                      {showWalletBalances && (
+                        <>
+                          <th className="px-3 py-2.5 text-right">Escrow Balance</th>
+                          <th className="px-3 py-2.5 text-right">Commission Balance</th>
+                        </>
+                      )}
+                      <th className="px-3 py-2.5">Type</th>
+                      <th className="px-3 py-2.5">Direction</th>
+                      <th className="px-3 py-2.5">Recipient</th>
+                      <th className="px-3 py-2.5">Provider</th>
+                      <th className="px-3 py-2.5">Status</th>
+                      <th className="px-3 py-2.5">Channel</th>
+                      <th className="px-3 py-2.5 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -469,46 +526,62 @@ export default function TransactionsPage() {
                     const isPending = tx.status === "PENDING" || tx.status === "PROCESSING"
 
                     return (
-                      <tr key={tx.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                        <td className="py-2 pr-4 align-top text-xs text-gray-500">
-                          <div>{dateStr}</div>
-                          <div>{timeStr}</div>
+                      <tr key={tx.id} className="group border-b border-slate-100 transition-colors last:border-b-0 hover:bg-[#fafbfe]">
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-500">
+                          <div className="font-medium text-slate-600">{dateStr}</div>
+                          <div className="mt-0.5 text-[9px] text-slate-400">{timeStr}</div>
                         </td>
-                        <td className="py-2 pr-4 align-top">
-                          <div className="font-mono text-xs text-[#08163d] truncate max-w-[180px]">
+                        <td className="px-3 py-3 align-top">
+                          <div className="max-w-[180px] truncate font-mono text-[10px] font-medium text-[#08163d]">
                             {tx.reference || tx.externalReference || "—"}
                           </div>
                           {tx.description && (
-                            <div className="text-[11px] text-gray-500 truncate max-w-[220px]">
+                            <div className="mt-0.5 max-w-[200px] truncate text-[9px] text-slate-400">
                               {tx.description}
                             </div>
                           )}
                         </td>
-                        <td className="py-2 pr-4 align-top">
-                          <div className="font-mono text-xs text-gray-700 truncate max-w-[150px]">
+                        <td className="px-3 py-3 align-top">
+                          <div className="max-w-[140px] truncate font-mono text-[10px] text-slate-500">
                             {tx.partnerReference || "—"}
                           </div>
                         </td>
-                        <td className="py-2 pr-4 align-top text-sm font-semibold text-[#08163d]">
+                        <td className="px-3 py-3 align-top text-[11px] font-semibold text-[#08163d]">
                           {tx.currency} {tx.amount.toLocaleString()}
                           {tx.fee > 0 && (
-                            <div className="text-[11px] text-gray-400">Fee: {tx.currency} {tx.fee.toLocaleString()}</div>
+                            <div className="mt-0.5 text-[9px] font-normal text-slate-400">Fee {tx.currency} {tx.fee.toLocaleString()}</div>
                           )}
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.type}</td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.direction || "—"}</td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">
-                          <div>{tx.recipientAccount || "—"}</div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">
+                        {showWalletBalances && (
+                          <>
+                            <td className="px-3 py-3 text-right align-top text-[10px] font-medium text-slate-700">
+                              {tx.escrowWalletBalance != null
+                                ? `${tx.currency} ${Number(tx.escrowWalletBalance).toLocaleString()}`
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-3 text-right align-top text-[10px] font-medium text-slate-700">
+                              {tx.commissionWalletBalance != null
+                                ? `${tx.currency} ${Number(tx.commissionWalletBalance).toLocaleString()}`
+                                : "—"}
+                            </td>
+                          </>
+                        )}
+                        <td className="px-3 py-3 align-top text-[10px] font-medium capitalize text-slate-600">
+                          {tx.type.toLowerCase().replaceAll("_", " ")}
+                        </td>
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-500">{tx.direction || "—"}</td>
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-600">
+                          <div className="max-w-[150px] truncate">{tx.recipientAccount || "—"}</div>
+                          <div className="mt-0.5 max-w-[150px] truncate text-[9px] text-slate-400">
                             {tx.recipientName || "N/A"}
                           </div>
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-600">
                           {tx.providerName ? (
                             <>
                               {tx.providerName}
                               {tx.providerType && (
-                                <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">
+                                <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[8px] uppercase text-slate-500">
                                   {tx.providerType}
                                 </span>
                               )}
@@ -517,26 +590,35 @@ export default function TransactionsPage() {
                             "—"
                           )}
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs">
+                        <td className="px-3 py-3 align-top">
                           <span
                             className={
-                              "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium " +
+                              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-semibold capitalize " +
                               (isSuccess
-                                ? "bg-green-100 text-green-700"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                                 : isPending
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700")
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-rose-200 bg-rose-50 text-rose-700")
                             }
                           >
-                            {tx.status}
+                            <span className="size-1 rounded-full bg-current" />
+                            {tx.status.toLowerCase()}
                           </span>
                         </td>
-                        <td className="py-2 pr-4 align-top text-xs text-gray-600">{tx.channel || "—"}</td>
-                        <td className="py-2 pr-4 align-top text-xs text-right">
+                        <td className="px-3 py-3 align-top text-[10px] text-slate-500">{tx.channel || "—"}</td>
+                        <td className="px-3 py-3 text-right align-top">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTx(tx)}
+                            className="mr-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-semibold text-slate-600 opacity-70 hover:bg-slate-100 hover:text-[#08163d] group-hover:opacity-100"
+                          >
+                            <Eye className="size-3" />
+                            View
+                          </button>
                           <button
                             type="button"
                             onClick={() => openReversalPopup(tx)}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-[11px] text-[#08163d] hover:bg-gray-50"
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-semibold text-[#08163d] opacity-70 hover:bg-[#eef2ff] group-hover:opacity-100"
                           >
                             <RotateCcw className="w-3 h-3" />
                             Reverse
@@ -550,11 +632,11 @@ export default function TransactionsPage() {
               </div>
 
               {/* Pagination controls */}
-              <div className="flex items-center justify-between mt-4 text-xs text-gray-600">
+              <div className="flex items-center justify-between border-t border-slate-200 px-3 py-2.5 text-[10px] text-slate-500">
                 <div className="flex items-center gap-2">
                   <span>Rows per page:</span>
                   <select
-                    className="border rounded-md px-2 py-1"
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 outline-none"
                     value={pageSize}
                     onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
                   >
@@ -568,14 +650,14 @@ export default function TransactionsPage() {
                     Page {page} of {totalPages}
                   </span>
                   <button
-                    className="px-2 py-1 border rounded-md disabled:opacity-50"
+                    className="h-7 rounded-md border border-slate-200 px-2.5 font-medium hover:bg-slate-50 disabled:opacity-50"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
                   >
                     Prev
                   </button>
                   <button
-                    className="px-2 py-1 border rounded-md disabled:opacity-50"
+                    className="h-7 rounded-md border border-slate-200 px-2.5 font-medium hover:bg-slate-50 disabled:opacity-50"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
                   >
@@ -587,6 +669,173 @@ export default function TransactionsPage() {
           )}
         </div>
       </main>
+
+      {/* Transaction details drawer */}
+      {selectedTx && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <button
+            type="button"
+            aria-label="Close transaction details"
+            className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"
+            onClick={() => setSelectedTx(null)}
+          />
+          <aside className="relative z-10 flex h-full w-full max-w-md animate-in slide-in-from-right flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 px-5">
+              <div>
+                <h2 className="text-sm font-semibold text-[#08163d]">Transaction details</h2>
+                <p className="text-[10px] text-slate-400">Complete payment information</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTx(null)}
+                className="flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="mb-5 rounded-xl bg-[#08163d] p-4 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-white/55">Amount</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {selectedTx.currency} {selectedTx.amount.toLocaleString()}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-semibold capitalize ${
+                      selectedTx.status === "SUCCESS"
+                        ? "bg-emerald-400/15 text-emerald-300"
+                        : selectedTx.status === "PENDING" || selectedTx.status === "PROCESSING"
+                          ? "bg-amber-400/15 text-amber-300"
+                          : "bg-rose-400/15 text-rose-300"
+                    }`}
+                  >
+                    <span className="size-1 rounded-full bg-current" />
+                    {selectedTx.status.toLowerCase()}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-[10px]">
+                  <div>
+                    <p className="text-white/45">Fee</p>
+                    <p className="mt-0.5 font-medium">{selectedTx.currency} {selectedTx.fee.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/45">Net amount</p>
+                    <p className="mt-0.5 font-medium">{selectedTx.currency} {selectedTx.netAmount.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <section className="mb-5">
+                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Transaction
+                </h3>
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                  {[
+                    ["Reference", selectedTx.reference || selectedTx.externalReference || "—"],
+                    ["Partner reference", selectedTx.partnerReference || "—"],
+                    ["Transaction ID", selectedTx.id],
+                    ["Type", selectedTx.type.toLowerCase().replaceAll("_", " ")],
+                    ["Direction", selectedTx.direction || "—"],
+                    ["Channel", selectedTx.channel || "—"],
+                    ["Mode", selectedTx.mode || "—"],
+                    ["Created", new Date(selectedTx.createdAt).toLocaleString()],
+                    ["Processed", selectedTx.processedAt ? new Date(selectedTx.processedAt).toLocaleString() : "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-5 px-3 py-2.5 text-[10px]">
+                      <span className="shrink-0 text-slate-400">{label}</span>
+                      <span className={`text-right font-medium capitalize text-slate-700 ${label.includes("ID") || label.includes("Reference") ? "break-all font-mono" : ""}`}>
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="mb-5">
+                <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Recipient & provider
+                </h3>
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                  {[
+                    ["Recipient name", selectedTx.recipientName || "—"],
+                    ["Recipient account", selectedTx.recipientAccount || "—"],
+                    ["Provider", selectedTx.providerName || "—"],
+                    ["Provider type", selectedTx.providerType || "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-5 px-3 py-2.5 text-[10px]">
+                      <span className="shrink-0 text-slate-400">{label}</span>
+                      <span className="break-all text-right font-medium text-slate-700">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {showWalletBalances && (
+                <section className="mb-5">
+                  <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Wallet balances
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-[9px] text-slate-400">Escrow balance</p>
+                      <p className="mt-1 text-xs font-semibold text-[#08163d]">
+                        {selectedTx.escrowWalletBalance != null
+                          ? `${selectedTx.currency} ${Number(selectedTx.escrowWalletBalance).toLocaleString()}`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-[9px] text-slate-400">Commission balance</p>
+                      <p className="mt-1 text-xs font-semibold text-[#08163d]">
+                        {selectedTx.commissionWalletBalance != null
+                          ? `${selectedTx.currency} ${Number(selectedTx.commissionWalletBalance).toLocaleString()}`
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {selectedTx.description && (
+                <section>
+                  <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Description
+                  </h3>
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[10px] leading-5 text-slate-600">
+                    {selectedTx.description}
+                  </p>
+                </section>
+              )}
+            </div>
+
+            <div className="flex shrink-0 gap-2 border-t border-slate-200 p-4">
+              <button
+                type="button"
+                onClick={() => setSelectedTx(null)}
+                className="h-9 flex-1 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const tx = selectedTx
+                  setSelectedTx(null)
+                  openReversalPopup(tx)
+                }}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#08163d] text-[11px] font-semibold text-white hover:bg-[#0b1d52]"
+              >
+                <RotateCcw className="size-3.5" />
+                Request reversal
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* Reversal popup */}
       {reversalOpen && reversalTx && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
