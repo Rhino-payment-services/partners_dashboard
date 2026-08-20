@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Users, UserPlus, Trash2, X, AlertCircle, Pencil } from 'lucide-react'
+import { Users, UserPlus, Trash2, X, AlertCircle, Pencil, KeyRound, Mail } from 'lucide-react'
 import { apiRequest, getPartnerProfile } from '@/lib/api'
 import { usePartnerPermissions } from '@/hooks/use-partner-permissions'
 
@@ -33,10 +33,18 @@ export default function MembersPage() {
   const [success, setSuccess] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showSetPasswordModal, setShowSetPasswordModal] = useState(false)
   const [adding, setAdding] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [settingPassword, setSettingPassword] = useState(false)
+  const [sendingReset, setSendingReset] = useState<string | null>(null)
   const [editingMember, setEditingMember] = useState<PartnerMember | null>(null)
+  const [passwordTargetMember, setPasswordTargetMember] = useState<PartnerMember | null>(null)
+  const [setPasswordForm, setSetPasswordForm] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  })
 
   // Add member form state
   const [formData, setFormData] = useState({
@@ -205,6 +213,86 @@ export default function MembersPage() {
       setError(err.message || 'Failed to update member')
     } finally {
       setUpdating(false)
+    }
+  }
+
+  const handleOpenSetPasswordModal = (member: PartnerMember) => {
+    setPasswordTargetMember(member)
+    setSetPasswordForm({ newPassword: '', confirmPassword: '' })
+    setError('')
+    setSuccess('')
+    setShowSetPasswordModal(true)
+  }
+
+  const handleSetMemberPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (!partnerId || !passwordTargetMember) {
+      setError('No member selected')
+      return
+    }
+
+    if (setPasswordForm.newPassword.length < 8) {
+      setError('Password must be at least 8 characters long')
+      return
+    }
+
+    if (setPasswordForm.newPassword !== setPasswordForm.confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    try {
+      setSettingPassword(true)
+      const response = await apiRequest(
+        `/partner/${partnerId}/members/${passwordTargetMember.id}/set-password`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            newPassword: setPasswordForm.newPassword,
+            confirmPassword: setPasswordForm.confirmPassword,
+          }),
+        },
+      )
+      setSuccess(response.message || `Password updated for ${passwordTargetMember.email}`)
+      setShowSetPasswordModal(false)
+      setPasswordTargetMember(null)
+      setSetPasswordForm({ newPassword: '', confirmPassword: '' })
+    } catch (err: any) {
+      setError(err.message || 'Failed to set password')
+    } finally {
+      setSettingPassword(false)
+    }
+  }
+
+  const handleSendPasswordReset = async (member: PartnerMember) => {
+    if (!partnerId) {
+      setError('Partner not found')
+      return
+    }
+
+    if (
+      !confirm(
+        `Send a password reset email to ${member.email}? They will receive a link to set a new password.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      setSendingReset(member.id)
+      setError('')
+      const response = await apiRequest(
+        `/partner/${partnerId}/members/${member.id}/send-password-reset`,
+        { method: 'POST' },
+      )
+      setSuccess(response.message || `Password reset email sent to ${member.email}`)
+    } catch (err: any) {
+      setError(err.message || 'Failed to send password reset email')
+    } finally {
+      setSendingReset(null)
     }
   }
 
@@ -381,7 +469,43 @@ export default function MembersPage() {
                           : 'Pending'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-2 flex-wrap">
+                          {member.status === 'ACTIVE' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenSetPasswordModal(member)}
+                                disabled={
+                                  settingPassword ||
+                                  sendingReset === member.id ||
+                                  updating ||
+                                  deleting === member.id
+                                }
+                                className="text-[#08163d] hover:text-[#0a1f4f]"
+                                title="Set a new password for this member"
+                              >
+                                <KeyRound className="mr-1" size={16} />
+                                Set password
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSendPasswordReset(member)}
+                                disabled={
+                                  settingPassword ||
+                                  sendingReset === member.id ||
+                                  updating ||
+                                  deleting === member.id
+                                }
+                                className="text-[#08163d] hover:text-[#0a1f4f]"
+                                title="Email a password reset link"
+                              >
+                                <Mail className="mr-1" size={16} />
+                                {sendingReset === member.id ? 'Sending…' : 'Send reset'}
+                              </Button>
+                            </>
+                          )}
                           {member.role !== 'OWNER' && (
                             <Button
                               variant="ghost"
@@ -576,6 +700,102 @@ export default function MembersPage() {
                     disabled={adding}
                   >
                     {adding ? 'Adding...' : 'Add Member'}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Set Password Modal */}
+        {showSetPasswordModal && passwordTargetMember && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-[#08163d] dark:text-white">
+                  Set Password
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowSetPasswordModal(false)
+                    setPasswordTargetMember(null)
+                    setSetPasswordForm({ newPassword: '', confirmPassword: '' })
+                    setError('')
+                  }}
+                >
+                  <X size={20} />
+                </Button>
+              </div>
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Set a new password for{' '}
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {passwordTargetMember.firstName} {passwordTargetMember.lastName}
+                </span>{' '}
+                ({passwordTargetMember.email}). They will be asked to change it on next login.
+              </p>
+
+              <form onSubmit={handleSetMemberPassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    New password <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="password"
+                    value={setPasswordForm.newPassword}
+                    onChange={(e) =>
+                      setSetPasswordForm({
+                        ...setPasswordForm,
+                        newPassword: e.target.value,
+                      })
+                    }
+                    placeholder="Minimum 8 characters"
+                    minLength={8}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Confirm password <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="password"
+                    value={setPasswordForm.confirmPassword}
+                    onChange={(e) =>
+                      setSetPasswordForm({
+                        ...setPasswordForm,
+                        confirmPassword: e.target.value,
+                      })
+                    }
+                    placeholder="Re-enter password"
+                    minLength={8}
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowSetPasswordModal(false)
+                      setPasswordTargetMember(null)
+                      setSetPasswordForm({ newPassword: '', confirmPassword: '' })
+                      setError('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-[#08163d] hover:bg-[#0a1f4f] text-white"
+                    disabled={settingPassword}
+                  >
+                    {settingPassword ? 'Saving…' : 'Set password'}
                   </Button>
                 </div>
               </form>
