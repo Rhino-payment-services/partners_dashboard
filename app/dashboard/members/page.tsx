@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Users, UserPlus, Trash2, X, AlertCircle } from 'lucide-react'
+import { Users, UserPlus, Trash2, X, AlertCircle, Pencil } from 'lucide-react'
 import { apiRequest, getPartnerProfile } from '@/lib/api'
 import { usePartnerPermissions } from '@/hooks/use-partner-permissions'
 
@@ -32,8 +32,11 @@ export default function MembersPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [editingMember, setEditingMember] = useState<PartnerMember | null>(null)
 
   // Add member form state
   const [formData, setFormData] = useState({
@@ -43,6 +46,14 @@ export default function MembersPage() {
     lastName: '',
     phoneNumber: '',
     role: 'MEMBER' as 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'MEMBER' | 'VIEWER',
+  })
+  const [editFormData, setEditFormData] = useState({
+    role: 'MEMBER' as 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'MEMBER' | 'VIEWER',
+    canViewTransactions: true,
+    canManageApiKeys: false,
+    canViewAnalytics: true,
+    canManageMembers: false,
+    canConfigureTariffs: false,
   })
 
   useEffect(() => {
@@ -152,6 +163,48 @@ export default function MembersPage() {
       setError(err.message || 'Failed to remove member')
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const handleOpenEditModal = (member: PartnerMember) => {
+    setEditingMember(member)
+    setEditFormData({
+      role: member.role as 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'MEMBER' | 'VIEWER',
+      canViewTransactions: member.canViewTransactions,
+      canManageApiKeys: member.canManageApiKeys,
+      canViewAnalytics: member.canViewAnalytics,
+      canManageMembers: member.canManageMembers,
+      canConfigureTariffs: member.canConfigureTariffs,
+    })
+    setError('')
+    setSuccess('')
+    setShowEditModal(true)
+  }
+
+  const handleEditMember = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (!editingMember) {
+      setError('No member selected for editing')
+      return
+    }
+
+    try {
+      setUpdating(true)
+      await apiRequest(`/partner/members/${editingMember.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(editFormData),
+      })
+      setSuccess('Member updated successfully!')
+      setShowEditModal(false)
+      setEditingMember(null)
+      await loadMembers()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update member')
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -328,24 +381,38 @@ export default function MembersPage() {
                           : 'Pending'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {member.role !== 'OWNER' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteMember(member.id)}
-                            disabled={deleting === member.id}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            {deleting === member.id ? (
-                              'Removing...'
-                            ) : (
-                              <>
-                                <Trash2 className="mr-1" size={16} />
-                                Remove
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {member.role !== 'OWNER' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenEditModal(member)}
+                              disabled={updating || deleting === member.id}
+                              className="text-[#08163d] hover:text-[#0a1f4f]"
+                            >
+                              <Pencil className="mr-1" size={16} />
+                              Edit
+                            </Button>
+                          )}
+                          {member.role !== 'OWNER' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteMember(member.id)}
+                              disabled={deleting === member.id || updating}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              {deleting === member.id ? (
+                                'Removing...'
+                              ) : (
+                                <>
+                                  <Trash2 className="mr-1" size={16} />
+                                  Remove
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -509,6 +576,154 @@ export default function MembersPage() {
                     disabled={adding}
                   >
                     {adding ? 'Adding...' : 'Add Member'}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Member Modal */}
+        {showEditModal && editingMember && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-[#08163d] dark:text-white">
+                  Edit Team Member
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowEditModal(false)
+                    setEditingMember(null)
+                    setError('')
+                  }}
+                >
+                  <X size={20} />
+                </Button>
+              </div>
+
+              <form onSubmit={handleEditMember} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Email
+                  </label>
+                  <Input type="email" value={editingMember.email} disabled />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Role <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editFormData.role}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        role: e.target.value as any,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    required
+                  >
+                    <option value="VIEWER">Viewer (Read-only)</option>
+                    <option value="MEMBER">Member (Basic access)</option>
+                    <option value="DEVELOPER">Developer (API Keys + Analytics)</option>
+                    <option value="ADMIN">Admin (Full access)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Permissions
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={editFormData.canViewTransactions}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          canViewTransactions: e.target.checked,
+                        })
+                      }
+                    />
+                    View Transactions
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={editFormData.canManageApiKeys}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          canManageApiKeys: e.target.checked,
+                        })
+                      }
+                    />
+                    Manage API Keys
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={editFormData.canViewAnalytics}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          canViewAnalytics: e.target.checked,
+                        })
+                      }
+                    />
+                    View Analytics
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={editFormData.canManageMembers}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          canManageMembers: e.target.checked,
+                        })
+                      }
+                    />
+                    Manage Members
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={editFormData.canConfigureTariffs}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          canConfigureTariffs: e.target.checked,
+                        })
+                      }
+                    />
+                    Configure Tariffs
+                  </label>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowEditModal(false)
+                      setEditingMember(null)
+                      setError('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-[#08163d] hover:bg-[#0a1f4f] text-white"
+                    disabled={updating}
+                  >
+                    {updating ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
