@@ -470,7 +470,8 @@ export default function MembersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2 flex-wrap">
-                          {member.status === 'ACTIVE' && (
+                          {(member.status === 'ACTIVE' ||
+                            member.status === 'PENDING') && (
                             <>
                               <Button
                                 variant="ghost"
