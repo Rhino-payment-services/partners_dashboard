@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { isAuthenticated } from '@/lib/auth'
+import { getUser, isAuthenticated } from '@/lib/auth'
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -23,9 +23,15 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       setIsLoading(false)
 
       if (!authenticated) {
-        // Store the current path to redirect back after login
         const returnUrl = pathname !== '/auth/login' ? pathname : '/'
         router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+        return
+      }
+
+      const user = getUser()
+      if (user?.mustChangePassword && pathname !== '/auth/change-password') {
+        setIsAuth(false)
+        router.push('/auth/change-password')
       }
     }
 

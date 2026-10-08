@@ -10,8 +10,8 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
   const [password, setPassword] = useState('')
-  const [loginMethod, setLoginMethod] = useState<'otp' | 'password'>('otp')
-  const [step, setStep] = useState<'email' | 'otp' | 'password'>('email')
+  const [loginMethod, setLoginMethod] = useState<'otp' | 'password'>('password')
+  const [step, setStep] = useState<'email' | 'otp' | 'password'>('password')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -71,14 +71,17 @@ export default function Login() {
         throw new Error(data.message || 'Login failed')
       }
 
-      // Store tokens
       if (data.accessToken) {
         localStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('refreshToken', data.refreshToken)
         localStorage.setItem('user', JSON.stringify(data.user))
       }
 
-      // Redirect to dashboard or return URL
+      if (data.user?.mustChangePassword) {
+        window.location.href = '/auth/change-password'
+        return
+      }
+
       const urlParams = new URLSearchParams(window.location.search)
       const returnUrl = urlParams.get('returnUrl') || '/dashboard'
       window.location.href = returnUrl
@@ -147,23 +150,7 @@ export default function Login() {
           </div>
         )}
 
-        {/* Login Method Toggle */}
         <div className="flex gap-2 mb-4">
-          <Button
-            type="button"
-            variant={loginMethod === 'otp' ? 'default' : 'outline'}
-            onClick={() => {
-              setLoginMethod('otp')
-              setStep('email')
-              setOtp('')
-              setPassword('')
-              setError('')
-              setMessage('')
-            }}
-            className="flex-1"
-          >
-            Login with OTP
-          </Button>
           <Button
             type="button"
             variant={loginMethod === 'password' ? 'default' : 'outline'}
@@ -178,6 +165,21 @@ export default function Login() {
             className="flex-1"
           >
             Login with Password
+          </Button>
+          <Button
+            type="button"
+            variant={loginMethod === 'otp' ? 'default' : 'outline'}
+            onClick={() => {
+              setLoginMethod('otp')
+              setStep('email')
+              setOtp('')
+              setPassword('')
+              setError('')
+              setMessage('')
+            }}
+            className="flex-1"
+          >
+            Login with OTP
           </Button>
         </div>
 
@@ -239,11 +241,8 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1"
-                placeholder="Enter your password (default: password@123)"
+                placeholder="Enter your password"
               />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Default password: password@123 (if not changed)
-              </p>
             </div>
 
             <Button
