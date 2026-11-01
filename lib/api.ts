@@ -405,6 +405,42 @@ export async function initiatePartnerLiquidation(
   )
 }
 
+export type PartnerEscrowWallet = {
+  id: string
+  walletType: string
+  currency: string
+  balance: number
+  isActive?: boolean
+  isSuspended?: boolean
+}
+
+export async function initiatePartnerEscrowLiquidation(
+  input: InitiatePartnerLiquidationInput & { walletId?: string },
+) {
+  const body: Record<string, unknown> = {
+    amount: input.amount,
+    payoutMethod: input.payoutMethod,
+    reason: input.reason?.trim() || undefined,
+    partnerReference:
+      input.partnerReference?.trim() ||
+      `LIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ...(input.walletId ? { walletId: input.walletId } : {}),
+  }
+
+  if (input.payoutMethod === 'MTN' || input.payoutMethod === 'AIRTEL') {
+    body.phoneNumber = input.phoneNumber || input.mobileMoneyPhone
+  } else if (input.payoutMethod === 'BANK') {
+    body.bankName = input.bankName?.trim()
+    body.bankAccountNumber = input.bankAccountNumber?.trim()
+    body.bankAccountName = input.bankAccountName?.trim()
+  }
+
+  return apiRequest('/partner-auth/liquidations', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function listPartnerInstitutionTransactions(
   institutionId: string,
   params?: {

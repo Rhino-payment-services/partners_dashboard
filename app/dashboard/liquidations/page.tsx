@@ -14,6 +14,9 @@ import { usePartnerPermissions } from "@/hooks/use-partner-permissions"
 import {
   LIQUIDATION_AUTO_PAYOUT_THRESHOLD,
   getPartnerInstitutionWallet,
+  getPartnerProfile,
+  getPartnerTransactions,
+  initiatePartnerEscrowLiquidation,
   initiatePartnerLiquidation,
   listPartnerInstitutionTransactions,
   listPartnerInstitutions,
@@ -21,6 +24,12 @@ import {
   type PartnerInstitutionSummary,
   type PartnerInstitutionWallet,
 } from "@/lib/api"
+
+type LiquidationSource = "ESCROW" | "INSTITUTION"
+import {
+  UGANDA_BANKS,
+  findUgandaBankByName,
+} from "@/lib/constants/uganda-banks"
 
 function toNumber(value: unknown): number {
   if (typeof value === "number") return value
@@ -47,10 +56,12 @@ export default function LiquidationsPage() {
     usePartnerPermissions()
   const canLiquidate = isOwner || canManageMembers
 
+  const [source, setSource] = useState<LiquidationSource>("ESCROW")
   const [institutions, setInstitutions] = useState<PartnerInstitutionSummary[]>(
     [],
   )
   const [institutionId, setInstitutionId] = useState("")
+  const [escrowWalletId, setEscrowWalletId] = useState<string | null>(null)
   const [wallet, setWallet] = useState<PartnerInstitutionWallet | null>(null)
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [loadingMeta, setLoadingMeta] = useState(true)
@@ -68,30 +79,122 @@ export default function LiquidationsPage() {
   const [bankAccountName, setBankAccountName] = useState("")
   const [reason, setReason] = useState("")
 
+  const selectedBank = useMemo(
+    () => (bankName ? findUgandaBankByName(bankName) : undefined),
+    [bankName],
+  )
+
   const amountValue = toNumber(amount)
   const isManualInitiation =
     Number.isFinite(amountValue) &&
     amountValue > LIQUIDATION_AUTO_PAYOUT_THRESHOLD
   const availableBalance = toNumber(wallet?.balance)
 
-  const loadInstitutions = useCallback(async () => {
+  const mapHistory = (items: any[]): HistoryRow[] =>
+    items.map((row: any) => ({
+      id: String(row.id || row.transactionId || ""),
+      reference: row.reference || row.partnerReference || null,
+      amount: toNumber(row.amount),
+      status: String(row.status || "UNKNOWN"),
+      createdAt: row.createdAt,
+      payoutMethod: row.payoutMethod || row.metadata?.payoutMethod || null,
+    }))
+
+  const loadMeta = useCallback(async () => {
     setLoadingMeta(true)
     setError(null)
     try {
-      const rows = await listPartnerInstitutions("ACTIVE")
-      const active = rows.filter(
+      const [profileRes, rows] = await Promise.all([
+        getPartnerProfile(),
+        listPartnerInstitutions("ACTIVE").catch(() => []),
+      ])
+      const profile = profileRes?.data || profileRes
+      const wallets: any[] = Array.isArray(profile?.wallets)
+        ? profile.wallets
+        : []
+      const escrow =
+        wallets.find(
+          (w: any) =>
+            String(w.walletType || "").toUpperCase() === "ESCROW" &&
+            w.isActive !== false &&
+            w.isSuspended !== true,
+        ) ||
+        wallets.find(
+          (w: any) => String(w.walletType || "").toUpperCase() === "ESCROW",
+        )
+      setEscrowWalletId(escrow?.id ? String(escrow.id) : null)
+      if (escrow) {
+        setWallet({
+          walletId: String(escrow.id),
+          balance: escrow.balance,
+          currency: escrow.currency || "UGX",
+          saccoName: "Main escrow wallet",
+        })
+      }
+
+      const active = (Array.isArray(rows) ? rows : []).filter(
         (r) => String(r.status || "ACTIVE").toUpperCase() !== "DELETED",
       )
       setInstitutions(active)
-      setInstitutionId((prev) => prev || active[0]?.id || "")
+      if (active[0]?.id) setInstitutionId(active[0].id)
+      // Prefer escrow when available; otherwise fall back to first institution.
+      if (!escrow?.id && active[0]?.id) {
+        setSource("INSTITUTION")
+      } else {
+        setSource("ESCROW")
+      }
     } catch (err: any) {
-      setError(err?.message || "Failed to load institutions")
+      setError(err?.message || "Failed to load partner wallets")
     } finally {
       setLoadingMeta(false)
     }
   }, [])
 
-  const loadWalletAndHistory = useCallback(async (id: string) => {
+  const loadEscrowHistory = useCallback(async () => {
+    setLoadingWallet(true)
+    setError(null)
+    try {
+      const profileRes = await getPartnerProfile()
+      const profile = profileRes?.data || profileRes
+      const wallets: any[] = Array.isArray(profile?.wallets)
+        ? profile.wallets
+        : []
+      const escrow =
+        wallets.find(
+          (w: any) =>
+            String(w.walletType || "").toUpperCase() === "ESCROW" &&
+            (!escrowWalletId || String(w.id) === escrowWalletId),
+        ) ||
+        wallets.find(
+          (w: any) => String(w.walletType || "").toUpperCase() === "ESCROW",
+        )
+      if (escrow) {
+        setEscrowWalletId(String(escrow.id))
+        setWallet({
+          walletId: String(escrow.id),
+          balance: escrow.balance,
+          currency: escrow.currency || "UGX",
+          saccoName: "Main escrow wallet",
+        })
+      } else {
+        setWallet(null)
+      }
+
+      const txRes = await getPartnerTransactions({
+        page: 1,
+        pageSize: 20,
+        type: "LIQUIDATION",
+      })
+      setHistory(mapHistory(Array.isArray(txRes?.items) ? txRes.items : []))
+    } catch (err: any) {
+      setHistory([])
+      setError(err?.message || "Failed to load escrow wallet / history")
+    } finally {
+      setLoadingWallet(false)
+    }
+  }, [escrowWalletId])
+
+  const loadInstitutionWalletAndHistory = useCallback(async (id: string) => {
     if (!id) return
     setLoadingWallet(true)
     setError(null)
@@ -112,19 +215,7 @@ export default function LiquidationsPage() {
           : Array.isArray(txRes?.data)
             ? txRes.data
             : []
-      setHistory(
-        items.map((row: any) => ({
-          id: String(row.id || row.transactionId || ""),
-          reference: row.reference || row.partnerReference || null,
-          amount: toNumber(row.amount),
-          status: String(row.status || "UNKNOWN"),
-          createdAt: row.createdAt,
-          payoutMethod:
-            row.payoutMethod ||
-            row.metadata?.payoutMethod ||
-            null,
-        })),
-      )
+      setHistory(mapHistory(items))
     } catch (err: any) {
       setWallet(null)
       setHistory([])
@@ -134,15 +225,25 @@ export default function LiquidationsPage() {
     }
   }, [])
 
-  useEffect(() => {
-    void loadInstitutions()
-  }, [loadInstitutions])
+  const refreshCurrent = useCallback(async () => {
+    if (source === "ESCROW") {
+      await loadEscrowHistory()
+    } else if (institutionId) {
+      await loadInstitutionWalletAndHistory(institutionId)
+    }
+  }, [source, institutionId, loadEscrowHistory, loadInstitutionWalletAndHistory])
 
   useEffect(() => {
-    if (institutionId) {
-      void loadWalletAndHistory(institutionId)
+    void loadMeta()
+  }, [loadMeta])
+
+  useEffect(() => {
+    if (source === "ESCROW") {
+      void loadEscrowHistory()
+    } else if (institutionId) {
+      void loadInstitutionWalletAndHistory(institutionId)
     }
-  }, [institutionId, loadWalletAndHistory])
+  }, [source, institutionId, loadEscrowHistory, loadInstitutionWalletAndHistory])
 
   const selectedInstitution = useMemo(
     () => institutions.find((i) => i.id === institutionId) || null,
@@ -158,8 +259,12 @@ export default function LiquidationsPage() {
       setError("You do not have permission to request liquidations.")
       return
     }
-    if (!institutionId) {
+    if (source === "INSTITUTION" && !institutionId) {
       setError("Select a SACCO / institution first.")
+      return
+    }
+    if (source === "ESCROW" && !escrowWalletId && !wallet?.walletId) {
+      setError("No escrow wallet found on this partner account.")
       return
     }
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
@@ -168,7 +273,7 @@ export default function LiquidationsPage() {
     }
     if (Number.isFinite(availableBalance) && amountValue > availableBalance) {
       setError(
-        `Insufficient settlement wallet balance. Available: ${formatUgx(availableBalance)}.`,
+        `Insufficient wallet balance. Available: ${formatUgx(availableBalance)}.`,
       )
       return
     }
@@ -178,26 +283,34 @@ export default function LiquidationsPage() {
         setError("Mobile money phone number is required.")
         return
       }
-    } else if (!bankName.trim() || !bankAccountNumber.trim()) {
-      setError("Bank name and account number are required.")
+    } else if (!selectedBank || !bankAccountNumber.trim()) {
+      setError("Select a bank and enter the account number.")
       return
+    }
+
+    const payload = {
+      amount: amountValue,
+      payoutMethod,
+      reason: reason.trim() || undefined,
+      phoneNumber: phoneNumber.trim() || undefined,
+      mnoProvider:
+        payoutMethod === "MTN" || payoutMethod === "AIRTEL"
+          ? payoutMethod
+          : undefined,
+      bankName: selectedBank?.bankName,
+      bankAccountNumber: bankAccountNumber.trim() || undefined,
+      bankAccountName: bankAccountName.trim() || undefined,
     }
 
     setSubmitting(true)
     try {
-      const response = await initiatePartnerLiquidation(institutionId, {
-        amount: amountValue,
-        payoutMethod,
-        reason: reason.trim() || undefined,
-        phoneNumber: phoneNumber.trim() || undefined,
-        mnoProvider:
-          payoutMethod === "MTN" || payoutMethod === "AIRTEL"
-            ? payoutMethod
-            : undefined,
-        bankName: bankName.trim() || undefined,
-        bankAccountNumber: bankAccountNumber.trim() || undefined,
-        bankAccountName: bankAccountName.trim() || undefined,
-      })
+      const response =
+        source === "ESCROW"
+          ? await initiatePartnerEscrowLiquidation({
+              ...payload,
+              walletId: escrowWalletId || wallet?.walletId || undefined,
+            })
+          : await initiatePartnerLiquidation(institutionId, payload)
 
       const mode = String(
         response?.processingMode || response?.data?.processingMode || "",
@@ -215,7 +328,7 @@ export default function LiquidationsPage() {
       setBankAccountNumber("")
       setBankAccountName("")
       setReason("")
-      await loadWalletAndHistory(institutionId)
+      await refreshCurrent()
     } catch (err: any) {
       setError(err?.message || "Failed to submit liquidation")
     } finally {
@@ -251,7 +364,8 @@ export default function LiquidationsPage() {
             Liquidations
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Move settlement wallet funds to mobile money or bank. Amounts up to{" "}
+            Move funds from your main escrow or a SACCO settlement wallet to
+            mobile money or bank. Amounts up to{" "}
             {formatUgx(LIQUIDATION_AUTO_PAYOUT_THRESHOLD)} process automatically;
             larger amounts are submitted for RukaPay manual review.
           </p>
@@ -259,8 +373,8 @@ export default function LiquidationsPage() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => institutionId && loadWalletAndHistory(institutionId)}
-          disabled={!institutionId || loadingWallet}
+          onClick={() => void refreshCurrent()}
+          disabled={loadingWallet}
         >
           <RefreshCw
             className={`mr-2 h-4 w-4 ${loadingWallet ? "animate-spin" : ""}`}
@@ -288,28 +402,50 @@ export default function LiquidationsPage() {
         >
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">
-              Institution (SACCO)
+              Source wallet
             </label>
             <select
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={institutionId}
-              onChange={(e) => setInstitutionId(e.target.value)}
-              required
+              value={source}
+              onChange={(e) =>
+                setSource(e.target.value as LiquidationSource)
+              }
             >
-              <option value="" disabled>
-                Select institution
+              <option value="ESCROW">Main escrow wallet</option>
+              <option value="INSTITUTION" disabled={institutions.length === 0}>
+                Institution / SACCO settlement
               </option>
-              {institutions.map((inst) => (
-                <option key={inst.id} value={inst.id}>
-                  {inst.name || inst.code || inst.id}
-                </option>
-              ))}
             </select>
           </div>
 
+          {source === "INSTITUTION" && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">
+                Institution (SACCO)
+              </label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={institutionId}
+                onChange={(e) => setInstitutionId(e.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Select institution
+                </option>
+                {institutions.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name || inst.code || inst.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
             <div className="font-medium text-[#08163d]">
-              {selectedInstitution?.name || "Settlement wallet"}
+              {source === "ESCROW"
+                ? "Main escrow wallet"
+                : selectedInstitution?.name || "Settlement wallet"}
             </div>
             <div className="mt-1">
               Available balance:{" "}
@@ -387,19 +523,31 @@ export default function LiquidationsPage() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <label
-                  htmlFor="liq-bank-name"
+                  htmlFor="liq-bank"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700"
                 >
                   <Banknote className="h-3.5 w-3.5" />
-                  Bank name
+                  Bank
                 </label>
-                <Input
-                  id="liq-bank-name"
+                <select
+                  id="liq-bank"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  placeholder="e.g. Stanbic Bank"
                   required
-                />
+                >
+                  <option value="" disabled>
+                    Select bank
+                  </option>
+                  {UGANDA_BANKS.map((bank) => (
+                    <option
+                      key={`${bank.bankSortCode}-${bank.bankName}`}
+                      value={bank.bankName}
+                    >
+                      {bank.bankName} ({bank.bankSortCode})
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label
@@ -452,7 +600,12 @@ export default function LiquidationsPage() {
           <Button
             type="submit"
             className="w-full bg-[#08163d] hover:bg-[#0c2258]"
-            disabled={submitting || !institutionId}
+            disabled={
+              submitting ||
+              (source === "INSTITUTION"
+                ? !institutionId
+                : !escrowWalletId && !wallet?.walletId)
+            }
           >
             {submitting ? (
               <>
