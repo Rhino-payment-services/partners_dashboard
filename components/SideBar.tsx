@@ -21,6 +21,7 @@ import {
   Users,
   RotateCcw,
   Store,
+  Banknote,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Image from 'next/image'
@@ -42,6 +43,11 @@ const navigationItems: NavigationItem[] = [
     href: '/dashboard/transactions',
     icon: Activity,
     permission: 'canViewTransactions',
+  },
+  {
+    label: 'Liquidations',
+    href: '/dashboard/liquidations',
+    icon: Banknote,
   },
   {
     label: 'Reversals',
