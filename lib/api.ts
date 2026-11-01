@@ -299,3 +299,131 @@ export async function uploadPartnerMerchantDocument(
   )
   return response.data || response
 }
+
+// ─── Partner Institution Liquidation ─────────────────────────────────────────
+
+/** MoMo/bank liquidations above this amount are initiation-only (manual review). */
+export const LIQUIDATION_AUTO_PAYOUT_THRESHOLD = 5_000_000
+
+export type PartnerInstitutionSummary = {
+  id: string
+  code?: string
+  name?: string
+  status?: string
+}
+
+export type PartnerInstitutionWallet = {
+  saccoId?: string
+  saccoCode?: string
+  saccoName?: string
+  walletId?: string
+  balance?: number | string
+  currency?: string
+  publicWalletId?: string | null
+  isActive?: boolean
+  isSuspended?: boolean
+}
+
+export type LiquidationPayoutMethod = 'MTN' | 'AIRTEL' | 'BANK'
+
+export type InitiatePartnerLiquidationInput = {
+  amount: number
+  payoutMethod: LiquidationPayoutMethod
+  reason?: string
+  partnerReference?: string
+  phoneNumber?: string
+  mnoProvider?: 'MTN' | 'AIRTEL'
+  mobileMoneyPhone?: string
+  bankName?: string
+  bankAccountNumber?: string
+  bankAccountName?: string
+}
+
+function unwrapList(payload: any): any[] {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  if (Array.isArray(payload?.items)) return payload.items
+  if (Array.isArray(payload?.data?.items)) return payload.data.items
+  return []
+}
+
+export async function listPartnerInstitutions(
+  status?: string,
+): Promise<PartnerInstitutionSummary[]> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+  const response = await apiRequest(`/partner-institutions${qs}`, {
+    method: 'GET',
+  })
+  return unwrapList(response).map((row: any) => ({
+    id: String(row.id),
+    code: row.code,
+    name: row.name,
+    status: row.status,
+  }))
+}
+
+export async function getPartnerInstitutionWallet(
+  institutionId: string,
+): Promise<PartnerInstitutionWallet> {
+  const response = await apiRequest(
+    `/partner-institutions/${encodeURIComponent(institutionId)}/wallet`,
+    { method: 'GET' },
+  )
+  return (response?.data || response) as PartnerInstitutionWallet
+}
+
+export async function initiatePartnerLiquidation(
+  institutionId: string,
+  input: InitiatePartnerLiquidationInput,
+) {
+  const body: Record<string, unknown> = {
+    type: 'LIQUIDATION',
+    amount: input.amount,
+    payoutMethod: input.payoutMethod,
+    reason: input.reason?.trim() || undefined,
+    partnerReference:
+      input.partnerReference?.trim() ||
+      `LIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  }
+
+  if (input.payoutMethod === 'MTN' || input.payoutMethod === 'AIRTEL') {
+    body.mnoProvider = input.mnoProvider || input.payoutMethod
+    body.phoneNumber = input.phoneNumber || input.mobileMoneyPhone
+    body.mobileMoneyPhone = input.mobileMoneyPhone || input.phoneNumber
+  } else if (input.payoutMethod === 'BANK') {
+    body.bankName = input.bankName?.trim()
+    body.bankAccountNumber = input.bankAccountNumber?.trim()
+    body.bankAccountName = input.bankAccountName?.trim()
+  }
+
+  return apiRequest(
+    `/partner-institutions/${encodeURIComponent(institutionId)}/transactions`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+export async function listPartnerInstitutionTransactions(
+  institutionId: string,
+  params?: {
+    page?: number
+    limit?: number
+    type?: string
+    status?: string
+  },
+) {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.limit) query.set('limit', String(params.limit))
+  if (params?.type) query.set('type', params.type)
+  if (params?.status) query.set('status', params.status)
+  const qs = query.toString()
+  return apiRequest(
+    `/partner-institutions/${encodeURIComponent(institutionId)}/transactions${
+      qs ? `?${qs}` : ''
+    }`,
+    { method: 'GET' },
+  )
+}
