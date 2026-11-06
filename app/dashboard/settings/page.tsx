@@ -187,6 +187,12 @@ export default function Settings() {
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Partner Type:</span>
                     <span className="ml-2 text-gray-900 dark:text-white">{user.partner.partnerType}</span>
                   </div>
+                  {user.partner.partnerCode && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Partner Code:</span>
+                      <span className="ml-2 font-mono text-gray-900 dark:text-white">{user.partner.partnerCode}</span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
