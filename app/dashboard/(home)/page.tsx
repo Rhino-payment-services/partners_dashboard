@@ -17,6 +17,7 @@ interface PartnerProfile {
     id: string
     partnerName: string
     partnerType: string
+    partnerCode?: string | null
     contactEmail: string
     contactPhone: string | null
     contactPerson: string | null
@@ -158,6 +159,15 @@ function Home() {
               {partnerProfile && (
                 <div className="mt-1 text-[10px] text-slate-400">
                   {partnerProfile.partner.contactEmail} • {partnerProfile.partner.country || 'N/A'}
+                  {partnerProfile.partner.partnerCode && (
+                    <>
+                      {' '}
+                      • Code:{' '}
+                      <span className="font-mono font-semibold text-[#08163d]">
+                        {partnerProfile.partner.partnerCode}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
